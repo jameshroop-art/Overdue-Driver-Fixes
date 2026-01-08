@@ -68,10 +68,18 @@ fi
 # Test that direct pip install would fail (as expected)
 echo ""
 echo "Testing PEP 668 protection..."
-if python3 -m pip install --user test-package 2>&1 | grep -q "externally-managed-environment"; then
-    echo "✓ PEP 668 protection is active (pip install blocked as expected)"
+# Use a lightweight package that's likely not installed: pip itself as a test
+# This will fail with externally-managed error on Debian 12
+if python3 -m pip list --user >/dev/null 2>&1; then
+    # pip works for listing, now test if install would be blocked
+    if python3 -m pip install --dry-run --user pip 2>&1 | grep -q "externally-managed-environment"; then
+        echo "✓ PEP 668 protection is active (pip install blocked as expected)"
+    else
+        echo "⚠ PEP 668 protection could not be verified"
+        echo "  (This is not a problem - protection may be active in other ways)"
+    fi
 else
-    echo "⚠ Warning: Could not verify PEP 668 protection"
+    echo "⚠ Could not verify PEP 668 protection"
     echo "  (This is not necessarily a problem)"
 fi
 

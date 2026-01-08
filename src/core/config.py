@@ -35,7 +35,13 @@ class ConfigManager:
         self.ai_config = self._load_ai_config()
     
     def _find_template_dir(self):
-        """Find the configuration template directory"""
+        """
+        Find the configuration template directory
+        
+        Returns:
+            Path: Path to template directory if found, None otherwise.
+                  Calling code handles None by using default configs.
+        """
         for path in self.CONFIG_TEMPLATE_PATHS:
             if path.exists() and path.is_dir():
                 return path

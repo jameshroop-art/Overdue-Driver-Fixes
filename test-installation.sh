@@ -4,10 +4,27 @@
 
 set -e
 
+# Timeout for long-running operations (in seconds)
+OPERATION_TIMEOUT=300
+
 echo "===================================="
 echo "driver-mgt Installation Test"
 echo "===================================="
 echo ""
+
+# Function to run command with timeout
+run_with_timeout() {
+    local timeout=$1
+    shift
+    local cmd="$@"
+    
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$timeout" bash -c "$cmd"
+    else
+        # Fallback if timeout command not available
+        bash -c "$cmd"
+    fi
+}
 
 # Create test directory
 TEST_DIR="/tmp/driver-mgt-test-$$"
@@ -77,10 +94,10 @@ echo "✓ Virtual environment created"
 echo "Installing requirements..."
 if [ -f "requirements.txt" ]; then
     "$VENV_DIR/bin/pip" install --upgrade pip -q
-    if "$VENV_DIR/bin/pip" install -r requirements.txt -q; then
+    if run_with_timeout $OPERATION_TIMEOUT '"$VENV_DIR/bin/pip" install -r requirements.txt -q'; then
         echo "✓ Requirements installed"
     else
-        echo "✗ Failed to install requirements"
+        echo "✗ Failed to install requirements (timeout or error)"
         exit 1
     fi
 else

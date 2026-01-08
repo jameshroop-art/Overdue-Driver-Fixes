@@ -9,10 +9,13 @@ import subprocess
 from pathlib import Path
 
 
+# Installation directory for system-wide install
+SYSTEM_INSTALL_DIR = '/opt/driver-mgt'
+
 def get_venv_path():
     """Get the path to the virtual environment"""
     # Check for installed location first
-    installed_venv = Path('/opt/driver-mgt/venv')
+    installed_venv = Path(SYSTEM_INSTALL_DIR) / 'venv'
     if installed_venv.exists() and (installed_venv / 'bin' / 'python').exists():
         return installed_venv
     
