@@ -9,8 +9,9 @@ from datetime import datetime
 class RiskAssessor:
     """Assesses risk for driver installations"""
     
-    def __init__(self, config_manager):
+    def __init__(self, config_manager, ollama_manager=None):
         self.config = config_manager
+        self.ollama_manager = ollama_manager
         self.error_database = {}  # Would be loaded from a database
     
     def assess_hardware(self, hardware: Dict[str, Any]) -> Dict[str, Any]:
@@ -26,8 +27,18 @@ class RiskAssessor:
             'recommendations': []
         }
         
-        # Calculate risk based on various factors
-        risk_score = self._calculate_risk_score(hardware)
+        # Calculate base risk using heuristics
+        base_risk = self._calculate_risk_score(hardware)
+        
+        # Use AI to enhance risk assessment if enabled and available
+        ai_enabled = self.config.get_ai('risk_assessment.enabled', True)
+        if ai_enabled and self.ollama_manager and self.ollama_manager.is_available():
+            ai_risk = self._calculate_ai_risk(hardware, base_risk)
+            # Combine heuristic and AI risk (weighted average: 40% heuristic, 60% AI)
+            risk_score = int(base_risk * 0.4 + ai_risk * 0.6)
+        else:
+            risk_score = base_risk
+        
         risk_data['risk_percentage'] = risk_score
         risk_data['risk_level'] = self._get_risk_level(risk_score)
         
@@ -56,8 +67,18 @@ class RiskAssessor:
             'ai_can_remediate': False
         }
         
-        # Calculate driver-specific risk
-        risk_score = self._calculate_driver_risk(hardware, driver)
+        # Calculate base driver-specific risk
+        base_risk = self._calculate_driver_risk(hardware, driver)
+        
+        # Use AI to enhance driver risk assessment if enabled and available
+        ai_enabled = self.config.get_ai('risk_assessment.enabled', True)
+        if ai_enabled and self.ollama_manager and self.ollama_manager.is_available():
+            ai_risk = self._calculate_ai_driver_risk(hardware, driver, base_risk)
+            # Combine heuristic and AI risk (weighted average: 40% heuristic, 60% AI)
+            risk_score = int(base_risk * 0.4 + ai_risk * 0.6)
+        else:
+            risk_score = base_risk
+        
         risk_data['risk_percentage'] = risk_score
         risk_data['risk_level'] = self._get_risk_level(risk_score)
         
@@ -177,3 +198,98 @@ class RiskAssessor:
             'entries': 0,
             'status': 'not_implemented'
         }
+    
+    def _calculate_ai_risk(self, hardware: Dict[str, Any], base_risk: int) -> int:
+        """Use AI to calculate risk for hardware"""
+        if not self.ollama_manager:
+            return base_risk
+        
+        # Prepare context for AI
+        context = f"""Analyze the risk of using this hardware configuration:
+Hardware: {hardware.get('name', 'Unknown')}
+Vendor: {hardware.get('vendor', 'Unknown')}
+Current Driver: {hardware.get('driver', 'None')}
+Base Risk Score: {base_risk}/100
+
+Consider:
+1. Known compatibility issues with this vendor/model
+2. Driver maturity and stability
+3. Common failure patterns
+4. Community feedback and bug reports
+
+Provide a risk score from 0-100 where:
+- 0-20: Very low risk (well-supported hardware)
+- 21-40: Low risk (generally stable)
+- 41-60: Medium risk (some known issues)
+- 61-80: High risk (frequent problems reported)
+- 81-100: Critical risk (major compatibility issues)
+
+Respond with ONLY the numeric risk score (0-100), nothing else."""
+        
+        try:
+            # Use OllamaManager to assess risk
+            result = self.ollama_manager.analyze_text(context)
+            if result.get('success'):
+                response = result.get('analysis', '').strip()
+                # Extract numeric value from response
+                import re
+                match = re.search(r'\b(\d+)\b', response)
+                if match:
+                    ai_risk = int(match.group(1))
+                    # Ensure within valid range
+                    return max(0, min(ai_risk, 100))
+        except Exception as e:
+            # If AI fails, return base risk
+            pass
+        
+        return base_risk
+    
+    def _calculate_ai_driver_risk(self, hardware: Dict[str, Any], driver: Dict[str, Any], base_risk: int) -> int:
+        """Use AI to calculate risk for specific driver installation"""
+        if not self.ollama_manager:
+            return base_risk
+        
+        # Prepare context for AI
+        context = f"""Analyze the risk of installing this driver:
+Hardware: {hardware.get('name', 'Unknown')}
+Vendor: {hardware.get('vendor', 'Unknown')}
+Driver: {driver.get('name', 'Unknown')}
+Driver Version: {driver.get('version', 'Unknown')}
+Driver Source: {driver.get('source', 'Unknown')}
+Driver Stability: {driver.get('stability', 'Unknown')}
+Current Driver: {hardware.get('driver', 'None')}
+Base Risk Score: {base_risk}/100
+
+Consider:
+1. Driver compatibility with this specific hardware
+2. Known bugs or issues with this driver version
+3. Stability of the driver source (official vs community)
+4. Installation failure rates
+5. Post-installation problems
+
+Provide a risk score from 0-100 where:
+- 0-20: Very low risk (well-tested, stable driver)
+- 21-40: Low risk (generally safe to install)
+- 41-60: Medium risk (proceed with caution)
+- 61-80: High risk (backup recommended)
+- 81-100: Critical risk (installation likely to fail)
+
+Respond with ONLY the numeric risk score (0-100), nothing else."""
+        
+        try:
+            # Use OllamaManager to assess risk
+            result = self.ollama_manager.analyze_text(context)
+            if result.get('success'):
+                response = result.get('analysis', '').strip()
+                # Extract numeric value from response
+                import re
+                match = re.search(r'\b(\d+)\b', response)
+                if match:
+                    ai_risk = int(match.group(1))
+                    # Ensure within valid range
+                    return max(0, min(ai_risk, 100))
+        except Exception as e:
+            # If AI fails, return base risk
+            pass
+        
+        return base_risk

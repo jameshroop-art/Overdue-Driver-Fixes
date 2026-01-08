@@ -102,6 +102,16 @@ Provide:
 3. Alternative approach if fix doesn't work
 """
         
+        return self.analyze_text(prompt)
+    
+    def analyze_text(self, prompt: str) -> Dict[str, Any]:
+        """Analyze text using AI model"""
+        if not self.is_available():
+            return {
+                'success': False,
+                'error': 'Ollama not available'
+            }
+        
         try:
             response = requests.post(
                 f"{self.base_url}/api/generate",

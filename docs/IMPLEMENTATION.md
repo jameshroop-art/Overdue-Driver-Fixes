@@ -57,16 +57,20 @@ driver-mgt/
 
 ### 4. Risk Assessment (`src/core/risk_assessor.py`)
 - Calculates risk percentage for hardware/driver combinations
+- **Hybrid risk calculation**: Combines heuristic-based scoring (40%) with AI-powered analysis (60%)
+- AI uses starcoder:3b via Ollama to analyze hardware compatibility and known issues
 - Assesses AI remediation capability
 - Provides recommendations
-- Supports error database checking
+- Falls back to heuristic-only when AI is unavailable
 
 ### 5. AI Integration (`src/ai/ollama_manager.py`)
 - Manages Ollama AI integration
 - Uses starcoder:3b model exclusively
-- Provides error analysis
-- Risk assessment support
+- Provides error analysis via `analyze_error()`
+- Powers AI risk assessment via `analyze_text()`
+- Risk calculation: AI analyzes hardware/driver context and returns risk score (0-100)
 - Monitoring framework
+- Falls back gracefully when Ollama is not available
 
 ### 6. GUI Application (`src/gui/main_window.py`)
 - PyQt6-based graphical interface
@@ -101,10 +105,12 @@ driver-mgt/
 - Testing framework
 
 ✅ **Risk Assessment System**
-- Risk percentage calculation
+- Hybrid risk percentage calculation (heuristics + AI)
+- AI-powered risk analysis using starcoder:3b when available
 - Known issue tracking
 - AI remediation capability assessment
 - Recommendations engine
+- Graceful fallback to heuristic-only mode
 
 ✅ **AI Integration**
 - Ollama status checking

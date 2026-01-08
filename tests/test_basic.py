@@ -71,9 +71,11 @@ def test_risk_assessor():
     """Test RiskAssessor"""
     from core.config import ConfigManager
     from core.risk_assessor import RiskAssessor
+    from ai.ollama_manager import OllamaManager
     
     config = ConfigManager()
-    assessor = RiskAssessor(config)
+    ollama = OllamaManager(config)
+    assessor = RiskAssessor(config, ollama)
     
     assert assessor is not None
     
