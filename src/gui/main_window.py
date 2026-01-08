@@ -40,7 +40,8 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         """Initialize user interface"""
         self.setWindowTitle("driver-mgt - Advanced Linux Driver Management")
-        self.setMinimumSize(1000, 700)
+        self.setMinimumSize(1200, 800)  # Increased minimum size for better layout
+        self.resize(1400, 900)  # Default size
         
         # Central widget
         central_widget = QWidget()
@@ -48,6 +49,8 @@ class MainWindow(QMainWindow):
         
         # Main layout
         layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
         
         # Title
         title = QLabel("driver-mgt")
@@ -97,6 +100,10 @@ class MainWindow(QMainWindow):
             "Type", "Name", "Vendor", "Current Driver", "Status"
         ])
         self.hardware_table.horizontalHeader().setStretchLastSection(True)
+        self.hardware_table.setSizePolicy(
+            self.hardware_table.sizePolicy().Policy.Expanding,
+            self.hardware_table.sizePolicy().Policy.Expanding
+        )
         layout.addWidget(self.hardware_table)
         
         # Action buttons
