@@ -422,46 +422,83 @@ class HardwareDetector:
                     }
                     
                     response = requests.get(url, params=params, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json()
-                        items = data.get('items', [])
+                    
+                    # Handle rate limiting and errors
+                    if response.status_code == 403:
+                        print(f"⚠ GitHub API rate limit reached")
+                        break
+                    elif response.status_code != 200:
+                        print(f"⚠ GitHub API returned status {response.status_code}")
+                        continue
+                    
+                    data = response.json()
+                    items = data.get('items', [])
+                    
+                    for item in items:
+                        # Check if repo seems relevant
+                        repo_name = item.get('name', '').lower()
+                        repo_desc = (item.get('description') or '').lower()
+                        repo_full_name = item.get('full_name', '')
+                        repo_owner = repo_full_name.split('/')[0].lower() if '/' in repo_full_name else ''
                         
-                        for item in items:
-                            # Check if repo seems relevant
-                            repo_name = item.get('name', '').lower()
-                            repo_desc = (item.get('description') or '').lower()
-                            repo_full_name = item.get('full_name', '')
-                            
-                            # Check for relevance
-                            is_relevant = (
-                                vendor.lower() in repo_name or
-                                vendor.lower() in repo_desc or
-                                'driver' in repo_name or
-                                'bios' in repo_name or
-                                'linux' in repo_name or
-                                'motherboard' in repo_name
-                            )
-                            
-                            if is_relevant and item.get('html_url'):
-                                repo_info = {
-                                    'name': item.get('name'),
-                                    'full_name': repo_full_name,
-                                    'url': item.get('html_url'),
-                                    'description': item.get('description', 'No description'),
-                                    'stars': item.get('stargazers_count', 0),
-                                    'official': vendor.lower() in repo_full_name.split('/')[0].lower()
-                                }
-                                
-                                # Avoid duplicates
-                                if not any(r['url'] == repo_info['url'] for r in repos):
-                                    repos.append(repo_info)
+                        # Check for relevance
+                        is_relevant = (
+                            vendor.lower() in repo_name or
+                            vendor.lower() in repo_desc or
+                            'driver' in repo_name or
+                            'bios' in repo_name or
+                            'linux' in repo_name or
+                            'motherboard' in repo_name
+                        )
                         
-                        # Limit to top 10 repos total
-                        if len(repos) >= 10:
-                            break
+                        # Better official repo detection
+                        # Only mark as official if:
+                        # 1. Owner exactly matches vendor name, OR
+                        # 2. Owner is a known official account
+                        official_accounts = {
+                            'asus': ['asus', 'asus-linux'],
+                            'msi': ['msi', 'msi-gaming'],
+                            'gigabyte': ['gigabyte', 'gigabyte-technology'],
+                            'asrock': ['asrock'],
+                        }
+                        
+                        is_official = False
+                        vendor_key = vendor.lower()
+                        if vendor_key in official_accounts:
+                            is_official = repo_owner in official_accounts[vendor_key]
+                        else:
+                            is_official = repo_owner == vendor_key
+                        
+                        if is_relevant and item.get('html_url'):
+                            repo_info = {
+                                'name': item.get('name'),
+                                'full_name': repo_full_name,
+                                'url': item.get('html_url'),
+                                'description': item.get('description', 'No description'),
+                                'stars': item.get('stargazers_count', 0),
+                                'official': is_official
+                            }
+                            
+                            # Avoid duplicates
+                            if not any(r['url'] == repo_info['url'] for r in repos):
+                                repos.append(repo_info)
+                    
+                    # Limit to top 10 repos total
+                    if len(repos) >= 10:
+                        break
                 
+                except requests.exceptions.Timeout:
+                    print(f"⚠ GitHub API timeout for search: {search_term}")
+                    continue
+                except requests.exceptions.ConnectionError:
+                    print(f"⚠ Cannot connect to GitHub API")
+                    break
+                except requests.exceptions.RequestException as e:
+                    print(f"⚠ GitHub API error: {e}")
+                    continue
                 except Exception as e:
                     # Continue with other search terms on error
+                    print(f"⚠ Error parsing GitHub response: {e}")
                     continue
         
         except Exception as e:

@@ -99,6 +99,8 @@ class OllamaManager:
         print("\nInitiating OAuth flow...")
         print("Connecting to Ollama authentication service...")
         
+        process = None  # Initialize to avoid NameError in exception handlers
+        
         try:
             # Run ollama signin command with real-time output
             # This communicates directly with the auth service
