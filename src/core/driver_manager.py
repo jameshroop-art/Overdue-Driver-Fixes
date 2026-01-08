@@ -1,11 +1,13 @@
 """
 Driver Management Module
 Handles driver discovery, installation, and management
+Connects to official driver sources for installations
 """
 
 from typing import List, Dict, Any
 import subprocess
 from pathlib import Path
+import requests
 
 # Risk assessment default values
 RISK_OFFICIAL_STABLE = 5
@@ -14,11 +16,88 @@ RISK_COMMUNITY_STABLE = 10
 RISK_BETA = 20
 RISK_UNKNOWN = 15
 
+# Driver source repositories
+DRIVER_SOURCES = {
+    'nvidia': {
+        'official': 'https://developer.download.nvidia.com/compute/cuda/repos/',
+        'ubuntu': 'ppa:graphics-drivers/ppa',
+        'debian': 'https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/',
+    },
+    'amd': {
+        'official': 'https://repo.radeon.com/amdgpu-install/',
+        'rocm': 'https://repo.radeon.com/rocm/apt/',
+    },
+    'intel': {
+        'official': 'https://repositories.intel.com/graphics/',
+    },
+    'wifi': {
+        'linux-firmware': 'https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git',
+    }
+}
+
 class DriverManager:
     """Manages driver operations"""
     
     def __init__(self, config_manager):
         self.config = config_manager
+        self.driver_sources = DRIVER_SOURCES
+        self.connected_sources = {}
+    
+    def check_source_connectivity(self, source_url: str) -> bool:
+        """Check if a driver source is accessible"""
+        try:
+            response = requests.head(source_url, timeout=5, allow_redirects=True)
+            return response.status_code < 400
+        except Exception as e:
+            print(f"Source connectivity check failed for {source_url}: {e}")
+            return False
+    
+    def connect_to_driver_sources(self, vendor: str) -> Dict[str, bool]:
+        """Connect to driver sources for a specific vendor"""
+        results = {}
+        
+        if vendor.upper() in ['NVIDIA', 'AMD', 'INTEL']:
+            vendor_key = vendor.lower()
+            if vendor_key in self.driver_sources:
+                sources = self.driver_sources[vendor_key]
+                for source_name, source_url in sources.items():
+                    # Check connectivity
+                    is_connected = self.check_source_connectivity(source_url)
+                    results[source_name] = is_connected
+                    
+                    # Store connection status
+                    cache_key = f"{vendor_key}_{source_name}"
+                    self.connected_sources[cache_key] = {
+                        'url': source_url,
+                        'connected': is_connected
+                    }
+        
+        return results
+    
+    def get_driver_download_url(self, driver: Dict[str, Any], hardware: Dict[str, Any]) -> str:
+        """Get download URL for a driver from its source"""
+        vendor = hardware.get('vendor', '').lower()
+        driver_name = driver.get('name', '')
+        source = driver.get('source', 'distribution')
+        
+        # NVIDIA drivers
+        if vendor == 'nvidia':
+            if 'nvidia-driver' in driver_name:
+                version = driver.get('version', '535.xx').split('.')[0]
+                return f"https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/nvidia-driver-{version}"
+        
+        # AMD drivers  
+        elif vendor == 'amd':
+            if driver_name == 'amdgpu':
+                return "https://repo.radeon.com/amdgpu-install/latest/ubuntu/jammy/amdgpu-install_latest_all.deb"
+            elif driver_name == 'amdgpu-pro':
+                return "https://repo.radeon.com/amdgpu-install/latest/ubuntu/jammy/amdgpu-install_latest_all.deb"
+        
+        # Intel drivers
+        elif vendor == 'intel':
+            return "https://repositories.intel.com/graphics/ubuntu/pool/main/"
+        
+        return None
     
     def find_drivers(self, hardware: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Find available drivers for hardware"""
@@ -57,6 +136,9 @@ class DriverManager:
         """Find available NVIDIA drivers"""
         drivers = []
         
+        # Check connectivity to NVIDIA sources
+        nvidia_sources = self.connect_to_driver_sources('NVIDIA')
+        
         # Official NVIDIA drivers
         # Using direct driver implementation without shim layers
         drivers.append({
@@ -66,7 +148,9 @@ class DriverManager:
             'stability': 'stable',
             'description': 'NVIDIA Official Driver 535',
             'shimmed': False,  # Direct driver, no shim layer
-            'glvnd': False
+            'glvnd': False,
+            'source_url': 'https://developer.download.nvidia.com/compute/cuda/repos/',
+            'source_connected': nvidia_sources.get('official', False)
         })
         
         drivers.append({
@@ -76,7 +160,9 @@ class DriverManager:
             'stability': 'beta',
             'description': 'NVIDIA Official Driver 545 (Beta)',
             'shimmed': False,  # Direct driver, no shim layer
-            'glvnd': False
+            'glvnd': False,
+            'source_url': 'https://developer.download.nvidia.com/compute/cuda/repos/',
+            'source_connected': nvidia_sources.get('official', False)
         })
         
         # Open source nouveau
@@ -87,7 +173,9 @@ class DriverManager:
             'stability': 'stable',
             'description': 'Nouveau Open Source Driver',
             'shimmed': False,
-            'glvnd': False
+            'glvnd': False,
+            'source_url': 'https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git',
+            'source_connected': True  # Kernel source always available
         })
         
         return drivers
@@ -95,6 +183,9 @@ class DriverManager:
     def _find_amd_drivers(self) -> List[Dict[str, Any]]:
         """Find available AMD drivers"""
         drivers = []
+        
+        # Check connectivity to AMD sources
+        amd_sources = self.connect_to_driver_sources('AMD')
         
         # AMDGPU driver
         drivers.append({
@@ -104,7 +195,9 @@ class DriverManager:
             'stability': 'stable',
             'description': 'AMD Official Open Source Driver',
             'shimmed': False,  # Direct driver, no shim layer
-            'glvnd': False
+            'glvnd': False,
+            'source_url': 'https://repo.radeon.com/amdgpu-install/',
+            'source_connected': amd_sources.get('official', False)
         })
         
         # AMDGPU-PRO
@@ -115,7 +208,9 @@ class DriverManager:
             'stability': 'stable',
             'description': 'AMD Professional Driver',
             'shimmed': False,  # Direct driver, no shim layer
-            'glvnd': False
+            'glvnd': False,
+            'source_url': 'https://repo.radeon.com/amdgpu-install/',
+            'source_connected': amd_sources.get('official', False)
         })
         
         return drivers
@@ -123,6 +218,9 @@ class DriverManager:
     def _find_intel_drivers(self) -> List[Dict[str, Any]]:
         """Find available Intel drivers"""
         drivers = []
+        
+        # Check connectivity to Intel sources
+        intel_sources = self.connect_to_driver_sources('INTEL')
         
         # i915 kernel driver
         drivers.append({
@@ -132,7 +230,9 @@ class DriverManager:
             'stability': 'stable',
             'description': 'Intel i915 Kernel Driver',
             'shimmed': False,  # Direct kernel driver, no shim layer
-            'glvnd': False
+            'glvnd': False,
+            'source_url': 'https://repositories.intel.com/graphics/',
+            'source_connected': intel_sources.get('official', False)
         })
         
         return drivers
@@ -200,14 +300,30 @@ class DriverManager:
     
     def install_driver(self, driver: Dict[str, Any], hardware: Dict[str, Any]) -> bool:
         """Install a driver (requires root privileges)"""
+        # Check source connectivity before installation
+        source_url = driver.get('source_url')
+        source_connected = driver.get('source_connected', True)
+        
+        if source_url and not source_connected:
+            print(f"Warning: Driver source may not be accessible: {source_url}")
+            print("Attempting installation anyway...")
+        
+        # Get download URL
+        download_url = self.get_driver_download_url(driver, hardware)
+        if download_url:
+            print(f"Driver source: {download_url}")
+        
         # This would perform actual installation
         # For now, it's a placeholder
-        if driver.get('shimmed', False):
-            shimmed_status = "Yes (GLVND)" if driver.get('glvnd', False) else "Yes"
-        else:
-            shimmed_status = "No"
+        shimmed_status = "Yes (GLVND)" if driver.get('shimmed', False) and driver.get('glvnd', False) else "No"
         print(f"Would install driver: {driver['name']} for {hardware['name']}")
         print(f"Is this installation shimmed? {shimmed_status}")
+        
+        if source_connected:
+            print(f"✓ Driver source connected: {source_url or 'system'}")
+        else:
+            print(f"⚠ Driver source connectivity issue")
+        
         return True
     
     def get_current_driver(self, hardware: Dict[str, Any]) -> Dict[str, Any]:

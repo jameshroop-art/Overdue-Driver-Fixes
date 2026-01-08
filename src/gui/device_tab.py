@@ -415,9 +415,9 @@ class DeviceTab(QWidget):
         
         # Drivers table
         self.drivers_table = QTableWidget()
-        self.drivers_table.setColumnCount(6)
+        self.drivers_table.setColumnCount(7)
         self.drivers_table.setHorizontalHeaderLabels([
-            "Driver", "Version", "Source", "Stability", "Risk %", "Actions"
+            "Driver", "Version", "Source", "Stability", "Risk %", "Source Status", "Actions"
         ])
         self.drivers_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.drivers_table)
@@ -632,10 +632,23 @@ Estimated Recovery Time: 2-5 minutes"""
                 risk_item.setBackground(QColor(100, 50, 50))
             self.drivers_table.setItem(i, 4, risk_item)
             
+            # Source connectivity status (NEW)
+            source_connected = driver.get('source_connected', True)
+            source_url = driver.get('source_url', 'N/A')
+            if source_connected:
+                status_item = QTableWidgetItem("✓ Connected")
+                status_item.setForeground(QColor(100, 255, 100))
+                status_item.setToolTip(f"Source: {source_url}")
+            else:
+                status_item = QTableWidgetItem("○ Offline")
+                status_item.setForeground(QColor(255, 100, 100))
+                status_item.setToolTip(f"Cannot connect to: {source_url}")
+            self.drivers_table.setItem(i, 5, status_item)
+            
             # Install button
             install_btn = QPushButton("Install with AI")
             install_btn.clicked.connect(lambda checked, d=driver: self.install_driver(d))
-            self.drivers_table.setCellWidget(i, 5, install_btn)
+            self.drivers_table.setCellWidget(i, 6, install_btn)
     
     def filter_drivers(self):
         """Filter drivers by source"""
