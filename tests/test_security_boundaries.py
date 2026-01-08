@@ -68,20 +68,20 @@ def test_blocked_domains():
     validator = DomainValidator(config)
     
     # Test random external domains
-    blocked, reason = validator.is_url_allowed('https://www.google.com')
-    assert not blocked, f"Google should be blocked"
+    allowed, reason = validator.is_url_allowed('https://www.google.com')
+    assert not allowed, f"Google should be blocked"
     print("✓ Google URL blocked")
     
-    blocked, reason = validator.is_url_allowed('https://www.reddit.com')
-    assert not blocked, f"Reddit should be blocked"
+    allowed, reason = validator.is_url_allowed('https://www.reddit.com')
+    assert not allowed, f"Reddit should be blocked"
     print("✓ Reddit URL blocked")
     
-    blocked, reason = validator.is_url_allowed('https://www.twitter.com')
-    assert not blocked, f"Twitter should be blocked"
+    allowed, reason = validator.is_url_allowed('https://www.twitter.com')
+    assert not allowed, f"Twitter should be blocked"
     print("✓ Twitter URL blocked")
     
-    blocked, reason = validator.is_url_allowed('https://example.com')
-    assert not blocked, f"Example.com should be blocked"
+    allowed, reason = validator.is_url_allowed('https://example.com')
+    assert not allowed, f"Example.com should be blocked"
     print("✓ Example.com URL blocked")
 
 
@@ -104,8 +104,8 @@ def test_github_search_validation():
     print("✓ Firmware search allowed")
     
     # Invalid searches (not driver/chipset related)
-    blocked, reason = validator.validate_github_search('javascript tutorial')
-    assert not blocked, f"Non-driver search should be blocked: {reason}"
+    allowed, reason = validator.validate_github_search('javascript tutorial')
+    assert not allowed, f"Non-driver search should be blocked: {reason}"
     print("✓ Non-driver search blocked")
 
 
@@ -124,8 +124,8 @@ def test_huggingface_search_validation():
     print("✓ HuggingFace hardware search allowed")
     
     # Invalid searches
-    blocked, reason = validator.validate_huggingface_search('text generation model')
-    assert not blocked, f"Non-hardware search should be blocked: {reason}"
+    allowed, reason = validator.validate_huggingface_search('text generation model')
+    assert not allowed, f"Non-hardware search should be blocked: {reason}"
     print("✓ HuggingFace non-hardware search blocked")
 
 
@@ -143,19 +143,19 @@ def test_filesystem_access():
     print("✓ Critical error filesystem access allowed")
     
     # Test blocked without critical error
-    blocked, reason = validator.is_filesystem_access_allowed(
+    allowed, reason = validator.is_filesystem_access_allowed(
         '~/.config/driver-mgt/logs/error.log', 
         is_critical_error=False
     )
-    assert not blocked, f"Filesystem access should be blocked without critical error: {reason}"
+    assert not allowed, f"Filesystem access should be blocked without critical error: {reason}"
     print("✓ Non-critical filesystem access blocked")
     
     # Test blocked directory (even with critical error)
-    blocked, reason = validator.is_filesystem_access_allowed(
+    allowed, reason = validator.is_filesystem_access_allowed(
         '/etc/passwd', 
         is_critical_error=True
     )
-    assert not blocked, f"Unauthorized directory should be blocked: {reason}"
+    assert not allowed, f"Unauthorized directory should be blocked: {reason}"
     print("✓ Unauthorized directory blocked")
 
 
@@ -170,8 +170,8 @@ def test_asus_path_validation():
     print("✓ ASUS support path allowed")
     
     # Invalid ASUS paths (not support/download)
-    blocked, reason = validator.is_url_allowed('https://www.asus.com/products/laptops/')
-    assert not blocked, f"ASUS product pages should be blocked: {reason}"
+    allowed, reason = validator.is_url_allowed('https://www.asus.com/products/laptops/')
+    assert not allowed, f"ASUS product pages should be blocked: {reason}"
     print("✓ ASUS product page blocked")
 
 
@@ -186,8 +186,8 @@ def test_phoronix_path_validation():
     print("✓ Phoronix review path allowed")
     
     # Invalid Phoronix paths
-    blocked, reason = validator.is_url_allowed('https://www.phoronix.com/forums/')
-    assert not blocked, f"Phoronix forums should be blocked: {reason}"
+    allowed, reason = validator.is_url_allowed('https://www.phoronix.com/forums/')
+    assert not allowed, f"Phoronix forums should be blocked: {reason}"
     print("✓ Phoronix forums blocked")
 
 
