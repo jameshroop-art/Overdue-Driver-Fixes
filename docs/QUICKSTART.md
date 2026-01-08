@@ -2,6 +2,8 @@
 
 ## Installation
 
+driver-mgt integrates CLI and GUI components seamlessly. A single installation provides both interfaces.
+
 ### Method 1: Using install.sh (Recommended)
 
 ```bash
@@ -34,7 +36,10 @@ chmod +x driver-mgt
 When you first run driver-mgt, it will:
 1. Create configuration directories in `~/.config/driver-mgt/`
 2. Copy configuration templates
-3. Scan for hardware (if you use CLI commands)
+3. Initialize both GUI and CLI components
+4. Scan for hardware (if you use CLI commands)
+
+The installation ensures the GUI and program work together seamlessly, sharing the same configuration and virtual environment.
 
 ## Basic Usage
 

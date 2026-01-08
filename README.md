@@ -187,14 +187,17 @@ driver-mgt
 ```
 
 The installer will:
-- Install all required dependencies
-- Set up Ollama with starcoder:3b model
-- Configure localhost AI services
-- Set up system services
-- Create desktop shortcut
-- Configure permissions
+- Install all required dependencies (Python 3.9+, PyQt6, etc.)
+- Create isolated virtual environment at `/opt/driver-mgt/venv`
+- Set up integrated GUI and CLI components
+- Configure localhost AI services (Ollama with starcoder:3b model)
+- Create user configuration directories (`~/.config/driver-mgt/`)
+- Create desktop shortcut for easy access
+- Verify installation with automated tests
 - Initialize hardware detection
 - Scan for official manufacturer repositories
+
+**Note**: The GUI and program are fully integrated. The same `driver-mgt` command provides both GUI and CLI interfaces.
 
 ## 📋 Requirements
 
