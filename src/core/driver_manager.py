@@ -58,15 +58,15 @@ class DriverManager:
         drivers = []
         
         # Official NVIDIA drivers
-        # Modern NVIDIA drivers (390+) use GLVND (shimmed)
+        # Using direct driver implementation without shim layers
         drivers.append({
             'name': 'nvidia-driver-535',
             'version': '535.xx',
             'source': 'official',
             'stability': 'stable',
             'description': 'NVIDIA Official Driver 535',
-            'shimmed': True,  # Uses GLVND
-            'glvnd': True
+            'shimmed': False,  # Direct driver, no shim layer
+            'glvnd': False
         })
         
         drivers.append({
@@ -75,8 +75,8 @@ class DriverManager:
             'source': 'official',
             'stability': 'beta',
             'description': 'NVIDIA Official Driver 545 (Beta)',
-            'shimmed': True,  # Uses GLVND
-            'glvnd': True
+            'shimmed': False,  # Direct driver, no shim layer
+            'glvnd': False
         })
         
         # Open source nouveau
@@ -86,7 +86,7 @@ class DriverManager:
             'source': 'community',
             'stability': 'stable',
             'description': 'Nouveau Open Source Driver',
-            'shimmed': False,  # Does not use GLVND shim layer
+            'shimmed': False,
             'glvnd': False
         })
         
@@ -103,8 +103,8 @@ class DriverManager:
             'source': 'official',
             'stability': 'stable',
             'description': 'AMD Official Open Source Driver',
-            'shimmed': True,  # Uses GLVND
-            'glvnd': True
+            'shimmed': False,  # Direct driver, no shim layer
+            'glvnd': False
         })
         
         # AMDGPU-PRO
@@ -114,8 +114,8 @@ class DriverManager:
             'source': 'official',
             'stability': 'stable',
             'description': 'AMD Professional Driver',
-            'shimmed': True,  # Uses GLVND
-            'glvnd': True
+            'shimmed': False,  # Direct driver, no shim layer
+            'glvnd': False
         })
         
         return drivers
@@ -131,7 +131,7 @@ class DriverManager:
             'source': 'distribution',
             'stability': 'stable',
             'description': 'Intel i915 Kernel Driver',
-            'shimmed': False,  # Kernel driver, not using GLVND shim
+            'shimmed': False,  # Direct kernel driver, no shim layer
             'glvnd': False
         })
         
@@ -148,7 +148,9 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'Intel Wireless Driver'
+                'description': 'Intel Wireless Driver',
+                'shimmed': False,  # Direct driver, no shim layer
+                'glvnd': False
             })
         
         elif vendor == 'Realtek':
@@ -157,7 +159,9 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'Realtek WiFi Driver'
+                'description': 'Realtek WiFi Driver',
+                'shimmed': False,
+                'glvnd': False
             })
         
         elif vendor == 'MediaTek':
@@ -166,7 +170,9 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'MediaTek WiFi Driver'
+                'description': 'MediaTek WiFi Driver',
+                'shimmed': False,
+                'glvnd': False
             })
         
         elif vendor == 'Broadcom':
@@ -175,7 +181,9 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'Broadcom WiFi Driver (Proprietary)'
+                'description': 'Broadcom WiFi Driver (Proprietary)',
+                'shimmed': False,
+                'glvnd': False
             })
             
             drivers.append({
@@ -183,7 +191,9 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'community',
                 'stability': 'stable',
-                'description': 'Broadcom Open Source Driver'
+                'description': 'Broadcom Open Source Driver',
+                'shimmed': False,
+                'glvnd': False
             })
         
         return drivers
@@ -192,7 +202,7 @@ class DriverManager:
         """Install a driver (requires root privileges)"""
         # This would perform actual installation
         # For now, it's a placeholder
-        shimmed_status = "Yes (GLVND)" if driver.get('shimmed', False) else "No"
+        shimmed_status = "No" if not driver.get('shimmed', False) else "Yes (GLVND)"
         print(f"Would install driver: {driver['name']} for {hardware['name']}")
         print(f"Is this installation shimmed? {shimmed_status}")
         return True

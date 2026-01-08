@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 def test_nvidia_driver_shimmed():
-    """Test that NVIDIA drivers have shimmed flag"""
+    """Test that NVIDIA drivers have shimmed flag set to False"""
     from core.config import ConfigManager
     from core.driver_manager import DriverManager
     
@@ -37,15 +37,15 @@ def test_nvidia_driver_shimmed():
     
     assert nvidia_535 is not None, "nvidia-driver-535 not found"
     assert 'shimmed' in nvidia_535, "shimmed flag not present"
-    assert nvidia_535['shimmed'] == True, "nvidia-driver-535 should be shimmed"
+    assert not nvidia_535['shimmed'], "nvidia-driver-535 should not be shimmed"
     assert 'glvnd' in nvidia_535, "glvnd flag not present"
-    assert nvidia_535['glvnd'] == True, "nvidia-driver-535 should use GLVND"
+    assert not nvidia_535['glvnd'], "nvidia-driver-535 should not use GLVND"
     
     print("✓ NVIDIA driver shimmed flag test passed")
     print(f"  nvidia-driver-535: shimmed={nvidia_535['shimmed']}, glvnd={nvidia_535['glvnd']}")
 
 def test_install_driver_output():
-    """Test that install_driver displays shimmed status"""
+    """Test that install_driver displays shimmed status as No"""
     from core.config import ConfigManager
     from core.driver_manager import DriverManager
     import io
@@ -58,8 +58,8 @@ def test_install_driver_output():
     driver = {
         'name': 'nvidia-driver-535',
         'version': '535.xx',
-        'shimmed': True,
-        'glvnd': True
+        'shimmed': False,
+        'glvnd': False
     }
     
     hardware = {
@@ -75,11 +75,11 @@ def test_install_driver_output():
     
     output = f.getvalue()
     
-    assert result == True, "install_driver should return True"
+    assert result, "install_driver should return True"
     assert "Would install driver: nvidia-driver-535" in output, "Missing driver name in output"
     assert "GeForce RTX 3090" in output, "Missing hardware name in output"
     assert "Is this installation shimmed?" in output, "Missing shimmed question in output"
-    assert "Yes (GLVND)" in output, "Missing shimmed status in output"
+    assert "No" in output, "Should show No for shimmed status"
     
     print("✓ install_driver output test passed")
     print(f"  Output: {output.strip()}")
@@ -110,13 +110,13 @@ def test_nouveau_not_shimmed():
     
     assert nouveau is not None, "nouveau not found"
     assert 'shimmed' in nouveau, "shimmed flag not present"
-    assert nouveau['shimmed'] == False, "nouveau should not be shimmed"
+    assert not nouveau['shimmed'], "nouveau should not be shimmed"
     
     print("✓ nouveau not shimmed test passed")
     print(f"  nouveau: shimmed={nouveau['shimmed']}")
 
 def test_amd_drivers_shimmed():
-    """Test that AMD drivers have shimmed flag"""
+    """Test that AMD drivers are not shimmed"""
     from core.config import ConfigManager
     from core.driver_manager import DriverManager
     
@@ -134,12 +134,12 @@ def test_amd_drivers_shimmed():
     assert isinstance(drivers, list)
     assert len(drivers) > 0
     
-    # Check all AMD drivers are shimmed
+    # Check all AMD drivers are not shimmed
     for driver in drivers:
         assert 'shimmed' in driver, f"shimmed flag not present in {driver['name']}"
-        assert driver['shimmed'] == True, f"{driver['name']} should be shimmed"
+        assert not driver['shimmed'], f"{driver['name']} should not be shimmed"
     
-    print("✓ AMD drivers shimmed test passed")
+    print("✓ AMD drivers not shimmed test passed")
 
 def run_all_tests():
     """Run all shimmed tests"""
