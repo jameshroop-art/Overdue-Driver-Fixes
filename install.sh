@@ -52,11 +52,12 @@ if [ "$PKG_MANAGER" = "apt" ]; then
         apt-get install -y python3 python3-pip python3-venv python3-dev \
                            build-essential pciutils lshw dmidecode \
                            libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
-                           libxcb-cursor0
+                           libxcb-cursor0 libegl1
     else
         # General Debian/Ubuntu packages
         apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode \
-                           libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libgl1-mesa-glx
+                           libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libgl1-mesa-glx \
+                           libegl1
     fi
     
     # Check Python version
@@ -65,10 +66,10 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     
 elif [ "$PKG_MANAGER" = "dnf" ]; then
     dnf install -y python3 python3-pip python3-devel gcc pciutils dmidecode \
-                   libxcb xcb-util-cursor libxkbcommon-x11
+                   libxcb xcb-util-cursor libxkbcommon-x11 mesa-libEGL
 elif [ "$PKG_MANAGER" = "pacman" ]; then
     pacman -S --noconfirm python python-pip base-devel pciutils dmidecode \
-                          libxcb xcb-util-cursor libxkbcommon-x11
+                          libxcb xcb-util-cursor libxkbcommon-x11 libglvnd
 fi
 
 echo ""
