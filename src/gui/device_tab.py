@@ -79,18 +79,31 @@ class DeviceTab(QWidget):
         self.ai_monitoring_enabled = False
         self.chat_enabled = False
         self.chat_history = []
+        self.monitored_operations = []
         
         self.init_ui()
         self.load_drivers()
     
+    def _is_checkbox_checked(self, state):
+        """Helper method to check if checkbox is checked"""
+        return state == Qt.CheckState.Checked.value
+    
     def init_ui(self):
         """Initialize the device tab UI"""
-        # Main splitter for content and chat
+        # Main splitter for content and chat (resizable)
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.setChildrenCollapsible(False)  # Prevent collapsing panels
         
-        # Left side: Device management content
+        # Left side: Device management content (scrollable)
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)  # Enable resizing
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        left_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
         left_widget = QWidget()
         layout = QVBoxLayout(left_widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(5, 5, 5, 5)
         
         # Device information section
         info_group = self.create_device_info_section()
@@ -103,6 +116,10 @@ class DeviceTab(QWidget):
         # Risk assessment section
         risk_group = self.create_risk_assessment_section()
         layout.addWidget(risk_group)
+        
+        # Driver Operations Monitoring section (NEW)
+        operations_group = self.create_driver_operations_section()
+        layout.addWidget(operations_group)
         
         # Available drivers section
         drivers_group = self.create_available_drivers_section()
@@ -121,18 +138,20 @@ class DeviceTab(QWidget):
         layout.addWidget(fallback_group)
         
         layout.addStretch()
+        left_scroll.setWidget(left_widget)
         
-        # Right side: Chat interface
+        # Right side: Chat interface (scrollable)
         chat_widget = self.create_chat_interface()
         
-        # Add both to splitter
-        main_splitter.addWidget(left_widget)
+        # Add both to splitter with initial sizes
+        main_splitter.addWidget(left_scroll)
         main_splitter.addWidget(chat_widget)
-        main_splitter.setStretchFactor(0, 2)  # Left side takes more space
-        main_splitter.setStretchFactor(1, 1)  # Right side takes less space
+        main_splitter.setStretchFactor(0, 3)  # Left side takes 3/4
+        main_splitter.setStretchFactor(1, 1)  # Right side takes 1/4
         
         # Set main layout
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(main_splitter)
     
     def create_device_info_section(self):
@@ -227,6 +246,154 @@ class DeviceTab(QWidget):
         self.assess_risk()
         
         return group
+    
+    def create_driver_operations_section(self):
+        """Create driver operations monitoring section"""
+        group = QGroupBox("Driver Operations - AI Monitoring")
+        layout = QVBoxLayout()
+        
+        # Description
+        desc_label = QLabel(
+            "Driver operations that AI can monitor for operational moderation:"
+        )
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet("font-weight: bold; color: #aaaaaa;")
+        layout.addWidget(desc_label)
+        
+        # Operations table
+        self.operations_table = QTableWidget()
+        self.operations_table.setColumnCount(4)
+        self.operations_table.setHorizontalHeaderLabels([
+            "Operation", "Status", "AI Monitoring", "Last Check"
+        ])
+        self.operations_table.horizontalHeader().setStretchLastSection(True)
+        self.operations_table.setMinimumHeight(200)
+        self.operations_table.setSizePolicy(
+            self.operations_table.sizePolicy().Policy.Expanding,
+            self.operations_table.sizePolicy().Policy.Expanding
+        )
+        
+        # Populate with driver operations
+        self.populate_driver_operations()
+        
+        layout.addWidget(self.operations_table)
+        
+        # Refresh button
+        refresh_layout = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh Operations Status")
+        refresh_btn.clicked.connect(self.refresh_driver_operations)
+        refresh_layout.addWidget(refresh_btn)
+        
+        auto_refresh_checkbox = QCheckBox("Auto-refresh (5s)")
+        auto_refresh_checkbox.setToolTip("Automatically refresh operation status every 5 seconds")
+        refresh_layout.addWidget(auto_refresh_checkbox)
+        
+        refresh_layout.addStretch()
+        layout.addLayout(refresh_layout)
+        
+        group.setLayout(layout)
+        return group
+    
+    def populate_driver_operations(self):
+        """Populate driver operations table"""
+        device_type = self.hardware.get('type', 'Device')
+        driver_name = self.hardware.get('driver', 'No driver')
+        
+        # Define operations based on device type
+        if device_type == 'GPU':
+            operations = [
+                ('GPU Memory Allocation', 'Monitor memory usage and prevent overallocation'),
+                ('GPU Clock Speed', 'Monitor and optimize clock speeds for performance'),
+                ('GPU Temperature', 'Monitor thermal levels and prevent overheating'),
+                ('GPU Power Draw', 'Monitor power consumption and prevent power spikes'),
+                ('Driver State', 'Monitor driver initialization and runtime state'),
+                ('Rendering Pipeline', 'Monitor graphics rendering operations'),
+                ('Compute Operations', 'Monitor CUDA/OpenCL compute tasks'),
+                ('Display Output', 'Monitor video output and display connection'),
+            ]
+        elif device_type == 'WiFi':
+            operations = [
+                ('WiFi Connection', 'Monitor connection stability and signal strength'),
+                ('Driver State', 'Monitor driver initialization and runtime state'),
+                ('Packet Transmission', 'Monitor network packet flow'),
+                ('Authentication', 'Monitor WiFi authentication process'),
+                ('Power Management', 'Monitor power saving states'),
+                ('Firmware State', 'Monitor firmware status and updates'),
+            ]
+        elif device_type == 'CPU':
+            operations = [
+                ('CPU Frequency', 'Monitor and optimize CPU frequency scaling'),
+                ('Thermal Management', 'Monitor CPU temperature and throttling'),
+                ('Cache Operations', 'Monitor CPU cache performance'),
+                ('Power States', 'Monitor C-states and power management'),
+            ]
+        else:
+            operations = [
+                ('Driver State', 'Monitor driver initialization and runtime state'),
+                ('Device Communication', 'Monitor device I/O operations'),
+                ('Error Handling', 'Monitor and correct driver errors'),
+                ('Power Management', 'Monitor device power states'),
+            ]
+        
+        self.operations_table.setRowCount(len(operations))
+        
+        for i, (operation, description) in enumerate(operations):
+            # Operation name
+            op_item = QTableWidgetItem(operation)
+            op_item.setToolTip(description)
+            self.operations_table.setItem(i, 0, op_item)
+            
+            # Status
+            if self.ai_monitoring_enabled:
+                status_item = QTableWidgetItem("✓ Active")
+                status_item.setForeground(QColor(100, 255, 100))
+            else:
+                status_item = QTableWidgetItem("○ Inactive")
+                status_item.setForeground(QColor(150, 150, 150))
+            self.operations_table.setItem(i, 1, status_item)
+            
+            # AI Monitoring status
+            if self.ai_monitoring_enabled:
+                monitor_item = QTableWidgetItem("Monitoring")
+                monitor_item.setForeground(QColor(100, 255, 100))
+            else:
+                monitor_item = QTableWidgetItem("Disabled")
+                monitor_item.setForeground(QColor(200, 200, 100))
+            self.operations_table.setItem(i, 2, monitor_item)
+            
+            # Last check
+            import datetime
+            if self.ai_monitoring_enabled:
+                last_check = datetime.datetime.now().strftime("%H:%M:%S")
+            else:
+                last_check = "N/A"
+            self.operations_table.setItem(i, 3, QTableWidgetItem(last_check))
+        
+        # Store operations for later refresh
+        self.monitored_operations = operations
+    
+    def refresh_driver_operations(self):
+        """Refresh driver operations status"""
+        import datetime
+        
+        for i in range(self.operations_table.rowCount()):
+            # Update status
+            if self.ai_monitoring_enabled:
+                status_item = QTableWidgetItem("✓ Active")
+                status_item.setForeground(QColor(100, 255, 100))
+                monitor_item = QTableWidgetItem("Monitoring")
+                monitor_item.setForeground(QColor(100, 255, 100))
+                last_check = datetime.datetime.now().strftime("%H:%M:%S")
+            else:
+                status_item = QTableWidgetItem("○ Inactive")
+                status_item.setForeground(QColor(150, 150, 150))
+                monitor_item = QTableWidgetItem("Disabled")
+                monitor_item.setForeground(QColor(200, 200, 100))
+                last_check = "N/A"
+            
+            self.operations_table.setItem(i, 1, status_item)
+            self.operations_table.setItem(i, 2, monitor_item)
+            self.operations_table.setItem(i, 3, QTableWidgetItem(last_check))
     
     def create_available_drivers_section(self):
         """Create available drivers section"""
@@ -647,7 +814,7 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def toggle_ai_monitoring_checkbox(self, state):
         """Toggle AI monitoring based on checkbox state"""
-        self.ai_monitoring_enabled = (state == Qt.CheckState.Checked.value)
+        self.ai_monitoring_enabled = self._is_checkbox_checked(state)
         device_name = self.hardware.get('name', 'Unknown')
         
         if self.ai_monitoring_enabled:
@@ -659,6 +826,9 @@ Estimated Recovery Time: 2-5 minutes"""
             # Save preference
             device_id = self.hardware.get('id', device_name)
             self.config.set(f'ai_monitoring.{device_id}.enabled', True)
+            
+            # Refresh operations table
+            self.refresh_driver_operations()
         else:
             # Disable monitoring
             self.ai_status_label.setText(f"AI Status: Monitoring disabled for {device_name}")
@@ -667,6 +837,9 @@ Estimated Recovery Time: 2-5 minutes"""
             # Save preference
             device_id = self.hardware.get('id', device_name)
             self.config.set(f'ai_monitoring.{device_id}.enabled', False)
+            
+            # Refresh operations table
+            self.refresh_driver_operations()
     
     def update_char_count(self):
         """Update character count label"""
@@ -771,7 +944,7 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def toggle_chat(self, state):
         """Toggle chat interface"""
-        self.chat_enabled = (state == Qt.CheckState.Checked.value)
+        self.chat_enabled = self._is_checkbox_checked(state)
         
         if self.chat_enabled:
             # Check if AI is available
@@ -822,27 +995,28 @@ Estimated Recovery Time: 2-5 minutes"""
         prompt = f"{context}\n\nUser question: {message}\n\nProvide a helpful, concise answer:"
         
         # Show thinking indicator
-        self.chat_display.append("<i style='color: gray;'>AI is thinking...</i><br>")
+        thinking_marker = "<span id='thinking'><i style='color: gray;'>AI is thinking...</i></span><br>"
+        self.chat_display.append(thinking_marker)
         self.chat_display.repaint()
         
         # Get AI response
         result = self.ollama_manager.analyze_text(prompt)
         
-        # Remove thinking indicator
-        cursor = self.chat_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.select(cursor.SelectionType.LineUnderCursor)
-        cursor.removeSelectedText()
+        # Remove thinking indicator by replacing with empty string
+        html = self.chat_display.toHtml()
+        html = html.replace(thinking_marker, '')
+        self.chat_display.setHtml(html)
         
+        response = ''
         if result.get('success'):
             response = result.get('analysis', 'No response')
             self.chat_display.append(f"<b style='color: lightgreen;'>AI:</b> {response}<br><br>")
         else:
-            error = result.get('error', 'Unknown error')
-            self.chat_display.append(f"<b style='color: red;'>Error:</b> {error}<br><br>")
+            response = result.get('error', 'Unknown error')
+            self.chat_display.append(f"<b style='color: red;'>Error:</b> {response}<br><br>")
         
         # Store in history
-        self.chat_history.append({'user': message, 'ai': response if result.get('success') else error})
+        self.chat_history.append({'user': message, 'ai': response})
     
     def clear_chat(self):
         """Clear chat history"""

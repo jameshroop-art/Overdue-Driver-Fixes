@@ -98,7 +98,9 @@ def test_ollama_manager():
 
 def test_install_script_ollama_section():
     """Test that install.sh has Ollama installation section"""
-    install_script_path = '/home/runner/work/Overdue-Driver-Fixes/Overdue-Driver-Fixes/install.sh'
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    install_script_path = os.path.join(script_dir, '..', 'install.sh')
     
     with open(install_script_path, 'r') as f:
         content = f.read()
