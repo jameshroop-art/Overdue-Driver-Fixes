@@ -64,10 +64,12 @@ class OllamaManager:
     def install_model(self) -> bool:
         """Install starcoder:3b model"""
         if not self.is_available():
-            print("Ollama is not running")
+            print("Ollama is not running. Please start Ollama service first.")
+            print("You can start it with: systemctl start ollama")
             return False
         
         print(f"Installing {self.model} model...")
+        print(f"This may take several minutes depending on your internet connection...")
         try:
             # Use ollama pull command
             # Show output in terminal for user visibility
@@ -77,7 +79,16 @@ class OllamaManager:
                 show_output=show_output,
                 timeout=300
             )
-            return result.returncode == 0
+            if result.returncode == 0:
+                print(f"✓ Model {self.model} installed successfully")
+                return True
+            else:
+                print(f"✗ Failed to install model {self.model}")
+                return False
+        except FileNotFoundError:
+            print(f"Error: 'ollama' command not found. Please install Ollama first.")
+            print(f"Visit https://ollama.ai/ for installation instructions.")
+            return False
         except Exception as e:
             print(f"Error installing model: {e}")
             return False
@@ -131,12 +142,28 @@ Provide:
                     'success': True,
                     'analysis': result.get('response', '')
                 }
+            elif response.status_code == 404:
+                # Model not found - provide helpful error message
+                return {
+                    'success': False,
+                    'error': f"Model '{self.model}' not found. Please install it first using: ollama pull {self.model}"
+                }
             else:
                 return {
                     'success': False,
                     'error': f"HTTP {response.status_code}"
                 }
         
+        except requests.exceptions.Timeout:
+            return {
+                'success': False,
+                'error': 'Request timed out. The AI model may be processing a large request.'
+            }
+        except requests.exceptions.ConnectionError:
+            return {
+                'success': False,
+                'error': 'Cannot connect to Ollama. Please ensure Ollama service is running.'
+            }
         except Exception as e:
             return {
                 'success': False,

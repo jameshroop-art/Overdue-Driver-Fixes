@@ -966,8 +966,24 @@ Estimated Recovery Time: 2-5 minutes"""
                 QMessageBox.warning(
                     self,
                     "AI Not Available",
-                    "Ollama AI service is not running.\n"
-                    "Please start Ollama service and ensure starcoder:3b model is installed."
+                    "Ollama AI service is not running.\n\n"
+                    "To use the AI chat feature:\n"
+                    "1. Install Ollama: https://ollama.ai/\n"
+                    "2. Start Ollama service\n"
+                    "3. Install the model: ollama pull starcoder:3b"
+                )
+                self.chat_enable_checkbox.setChecked(False)
+                return
+            
+            # Check if model is installed
+            model_name = self.ollama_manager.model
+            if status.get('model') == 'not_installed':
+                QMessageBox.warning(
+                    self,
+                    "Model Not Installed",
+                    f"The {model_name} model is not installed.\n\n"
+                    f"To install it, run this command in a terminal:\n"
+                    f"ollama pull {model_name}"
                 )
                 self.chat_enable_checkbox.setChecked(False)
                 return
@@ -980,6 +996,7 @@ Estimated Recovery Time: 2-5 minutes"""
             self.chat_display.append(
                 "<b style='color: green;'>Chat enabled. You can now communicate with starcoder:3b AI.</b><br>"
                 f"<i>Context: {self.hardware.get('name', 'Device')} driver management</i><br><br>"
+                "<i style='color: gray;'>Note: This is an AI assistant. Type your questions or describe issues you're experiencing.</i><br><br>"
             )
         else:
             # Disable chat interface
