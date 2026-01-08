@@ -12,6 +12,18 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
+# Ensure we're running in a virtual environment
+# This must be done before importing other modules
+try:
+    from utils.venv_manager import ensure_venv
+    
+    # Check if --no-venv flag is present (for debugging/development)
+    if '--no-venv' not in sys.argv:
+        ensure_venv()
+except Exception as e:
+    print(f"Warning: Failed to set up virtual environment: {e}")
+    print("Continuing with system Python...")
+
 from core.config import ConfigManager
 from core.hardware_detector import HardwareDetector
 from core.driver_manager import DriverManager
@@ -34,6 +46,8 @@ def parse_arguments():
                        help='Show subprocess output in terminal (default)')
     parser.add_argument('--no-show-output', dest='show_output', action='store_false',
                        help='Hide subprocess output (quiet mode)')
+    parser.add_argument('--no-venv', action='store_true',
+                       help='Skip virtual environment setup (for development)')
     parser.add_argument('command', nargs='?', help='Command to execute')
     
     # Sub-commands
