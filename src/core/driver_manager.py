@@ -31,6 +31,19 @@ class DriverManager:
         elif hw_type == 'WiFi':
             drivers.extend(self._find_wifi_drivers(hardware))
         
+        # Add risk percentage to each driver (mock values for now)
+        for driver in drivers:
+            if 'risk_percentage' not in driver:
+                # Calculate based on stability and source
+                if driver.get('stability') == 'stable' and driver.get('source') == 'official':
+                    driver['risk_percentage'] = 5
+                elif driver.get('stability') == 'stable':
+                    driver['risk_percentage'] = 10
+                elif driver.get('stability') == 'beta':
+                    driver['risk_percentage'] = 20
+                else:
+                    driver['risk_percentage'] = 15
+        
         return drivers
     
     def _find_nvidia_drivers(self) -> List[Dict[str, Any]]:
