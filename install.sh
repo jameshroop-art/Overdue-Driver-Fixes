@@ -160,6 +160,49 @@ fi
 ln -sf "$INSTALL_DIR/driver-mgt" /usr/local/bin/driver-mgt
 
 echo ""
+echo "Installing Ollama AI service..."
+
+# Check if Ollama is already installed
+if command -v ollama &> /dev/null; then
+    echo "✓ Ollama already installed"
+else
+    echo "Installing Ollama..."
+    # Install Ollama
+    curl -fsSL https://ollama.ai/install.sh | sh
+    
+    if command -v ollama &> /dev/null; then
+        echo "✓ Ollama installed successfully"
+    else
+        echo "⚠ Warning: Ollama installation may have failed"
+        echo "  You can manually install Ollama from: https://ollama.ai"
+    fi
+fi
+
+echo ""
+echo "Pulling starcoder:3b AI model..."
+
+# Start Ollama service if not running
+if ! systemctl is-active --quiet ollama 2>/dev/null; then
+    echo "Starting Ollama service..."
+    systemctl start ollama 2>/dev/null || echo "Note: Run 'systemctl start ollama' manually if needed"
+    sleep 3
+fi
+
+# Pull starcoder:3b model
+if command -v ollama &> /dev/null; then
+    echo "Pulling starcoder:3b model (this may take several minutes)..."
+    if ollama pull starcoder:3b; then
+        echo "✓ starcoder:3b model installed successfully"
+    else
+        echo "⚠ Warning: Failed to pull starcoder:3b model"
+        echo "  You can manually pull it later with: ollama pull starcoder:3b"
+    fi
+else
+    echo "⚠ Ollama not available, skipping model pull"
+    echo "  Install Ollama and run: ollama pull starcoder:3b"
+fi
+
+echo ""
 echo "Creating desktop entry..."
 cat > /usr/share/applications/driver-mgt.desktop <<EOF
 [Desktop Entry]
@@ -202,6 +245,8 @@ echo ""
 echo "Configuration files are stored in:"
 echo "  $ACTUAL_HOME/.config/driver-mgt/"
 echo ""
-echo "Optional: Install Ollama for AI-assisted management"
-echo "  Visit: https://ollama.ai"
+echo "AI Features:"
+echo "  Ollama service: $(command -v ollama &> /dev/null && echo 'Installed' || echo 'Not installed')"
+echo "  starcoder:3b model: $(ollama list 2>/dev/null | grep -q starcoder && echo 'Available' || echo 'Not pulled')"
+echo "  AI monitoring and chat interface available in GUI"
 echo ""

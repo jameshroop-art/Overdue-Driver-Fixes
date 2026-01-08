@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QGroupBox, QTextEdit,
     QProgressBar, QComboBox, QMessageBox, QScrollArea,
-    QProgressDialog
+    QProgressDialog, QCheckBox, QLineEdit, QSplitter, QTextBrowser
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -76,13 +76,21 @@ class DeviceTab(QWidget):
         self.config = config_manager
         self.available_drivers = []
         self.install_worker = None
+        self.ai_monitoring_enabled = False
+        self.chat_enabled = False
+        self.chat_history = []
         
         self.init_ui()
         self.load_drivers()
     
     def init_ui(self):
         """Initialize the device tab UI"""
-        layout = QVBoxLayout(self)
+        # Main splitter for content and chat
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Left side: Device management content
+        left_widget = QWidget()
+        layout = QVBoxLayout(left_widget)
         
         # Device information section
         info_group = self.create_device_info_section()
@@ -100,15 +108,32 @@ class DeviceTab(QWidget):
         drivers_group = self.create_available_drivers_section()
         layout.addWidget(drivers_group)
         
-        # AI features section
+        # AI features section with checkbox
         ai_group = self.create_ai_features_section()
         layout.addWidget(ai_group)
+        
+        # App Settings section
+        settings_group = self.create_app_settings_section()
+        layout.addWidget(settings_group)
         
         # Fallback plan section
         fallback_group = self.create_fallback_plan_section()
         layout.addWidget(fallback_group)
         
         layout.addStretch()
+        
+        # Right side: Chat interface
+        chat_widget = self.create_chat_interface()
+        
+        # Add both to splitter
+        main_splitter.addWidget(left_widget)
+        main_splitter.addWidget(chat_widget)
+        main_splitter.setStretchFactor(0, 2)  # Left side takes more space
+        main_splitter.setStretchFactor(1, 1)  # Right side takes less space
+        
+        # Set main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(main_splitter)
     
     def create_device_info_section(self):
         """Create device information section"""
@@ -238,6 +263,18 @@ class DeviceTab(QWidget):
         group = QGroupBox("AI-Assisted Features")
         layout = QVBoxLayout()
         
+        # AI Monitoring checkbox
+        ai_monitor_layout = QHBoxLayout()
+        self.ai_monitor_checkbox = QCheckBox("Enable AI Monitoring for this device")
+        self.ai_monitor_checkbox.setToolTip(
+            "AI will continuously monitor this driver's operations,\n"
+            "detect potential failures, and automatically prevent errors."
+        )
+        self.ai_monitor_checkbox.stateChanged.connect(self.toggle_ai_monitoring_checkbox)
+        ai_monitor_layout.addWidget(self.ai_monitor_checkbox)
+        ai_monitor_layout.addStretch()
+        layout.addLayout(ai_monitor_layout)
+        
         # AI status
         ai_status_layout = QHBoxLayout()
         self.ai_status_label = QLabel("AI Status: Checking...")
@@ -255,7 +292,8 @@ class DeviceTab(QWidget):
             "✓ Real-time installation monitoring",
             "✓ Automatic error detection and correction",
             "✓ Post-installation verification",
-            "✓ Proactive failure prevention"
+            "✓ Proactive failure prevention",
+            "✓ Per-device monitoring control"
         ]
         
         for feature in features:
@@ -268,10 +306,6 @@ class DeviceTab(QWidget):
         analyze_btn = QPushButton("AI Analyze Current Setup")
         analyze_btn.clicked.connect(self.ai_analyze_setup)
         ai_button_layout.addWidget(analyze_btn)
-        
-        monitor_btn = QPushButton("Enable AI Monitoring")
-        monitor_btn.clicked.connect(self.toggle_ai_monitoring)
-        ai_button_layout.addWidget(monitor_btn)
         
         ai_button_layout.addStretch()
         layout.addLayout(ai_button_layout)
@@ -310,6 +344,67 @@ Estimated Recovery Time: 2-5 minutes"""
         
         self.fallback_text.setPlainText(fallback_plan)
         layout.addWidget(self.fallback_text)
+        
+        group.setLayout(layout)
+        return group
+    
+    def create_app_settings_section(self):
+        """Create app settings section with AI training prepend"""
+        group = QGroupBox("App Settings - AI Training Context")
+        layout = QVBoxLayout()
+        
+        # Description
+        desc_label = QLabel(
+            "Prepend text for AI model training (1000+ characters).\n"
+            "This context will be used to train the AI for better understanding of this device:"
+        )
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet("font-weight: bold; color: #aaaaaa;")
+        layout.addWidget(desc_label)
+        
+        # Training prepend text field
+        self.training_prepend = QTextEdit()
+        self.training_prepend.setPlaceholderText(
+            "Enter detailed context about this device for AI training...\n\n"
+            "Example content:\n"
+            "- Device-specific quirks and known issues\n"
+            "- Optimal configuration settings\n"
+            "- Common error patterns and solutions\n"
+            "- Hardware-specific considerations\n"
+            "- Performance optimization tips\n"
+            "- Compatibility notes with specific software\n"
+            "- Thermal management considerations\n"
+            "- Power management best practices\n\n"
+            "Minimum 1000 characters required for effective training."
+        )
+        self.training_prepend.setMinimumHeight(200)
+        
+        # Load saved prepend if available
+        device_id = self.hardware.get('id', self.hardware.get('name', 'unknown'))
+        saved_prepend = self.config.get(f'ai_training.{device_id}.prepend', '')
+        if saved_prepend:
+            self.training_prepend.setPlainText(saved_prepend)
+        
+        layout.addWidget(self.training_prepend)
+        
+        # Character count label
+        self.char_count_label = QLabel("Characters: 0 / 1000 minimum")
+        self.char_count_label.setStyleSheet("color: #888888;")
+        self.training_prepend.textChanged.connect(self.update_char_count)
+        layout.addWidget(self.char_count_label)
+        
+        # Save button
+        save_layout = QHBoxLayout()
+        save_btn = QPushButton("Save Training Context")
+        save_btn.clicked.connect(self.save_training_prepend)
+        save_layout.addWidget(save_btn)
+        
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(self.clear_training_prepend)
+        save_layout.addWidget(clear_btn)
+        
+        save_layout.addStretch()
+        layout.addLayout(save_layout)
         
         group.setLayout(layout)
         return group
@@ -549,3 +644,212 @@ Estimated Recovery Time: 2-5 minutes"""
             )
         else:
             QMessageBox.information(self, "AI Monitoring", "Monitoring feature not yet fully implemented")
+    
+    def toggle_ai_monitoring_checkbox(self, state):
+        """Toggle AI monitoring based on checkbox state"""
+        self.ai_monitoring_enabled = (state == Qt.CheckState.Checked.value)
+        device_name = self.hardware.get('name', 'Unknown')
+        
+        if self.ai_monitoring_enabled:
+            # Enable monitoring
+            result = self.ollama_manager.monitor_driver(self.hardware)
+            self.ai_status_label.setText(f"AI Status: Monitoring {device_name}")
+            self.ai_status_label.setStyleSheet("color: lightgreen; font-weight: bold;")
+            
+            # Save preference
+            device_id = self.hardware.get('id', device_name)
+            self.config.set(f'ai_monitoring.{device_id}.enabled', True)
+        else:
+            # Disable monitoring
+            self.ai_status_label.setText(f"AI Status: Monitoring disabled for {device_name}")
+            self.ai_status_label.setStyleSheet("color: orange;")
+            
+            # Save preference
+            device_id = self.hardware.get('id', device_name)
+            self.config.set(f'ai_monitoring.{device_id}.enabled', False)
+    
+    def update_char_count(self):
+        """Update character count label"""
+        text = self.training_prepend.toPlainText()
+        char_count = len(text)
+        
+        if char_count >= 1000:
+            self.char_count_label.setText(f"Characters: {char_count} / 1000 minimum ✓")
+            self.char_count_label.setStyleSheet("color: lightgreen; font-weight: bold;")
+        else:
+            remaining = 1000 - char_count
+            self.char_count_label.setText(f"Characters: {char_count} / 1000 minimum ({remaining} more needed)")
+            self.char_count_label.setStyleSheet("color: orange;")
+    
+    def save_training_prepend(self):
+        """Save AI training prepend text"""
+        text = self.training_prepend.toPlainText()
+        
+        if len(text) < 1000:
+            QMessageBox.warning(
+                self,
+                "Insufficient Content",
+                f"Please enter at least 1000 characters for effective AI training.\n"
+                f"Current: {len(text)} characters\n"
+                f"Needed: {1000 - len(text)} more characters"
+            )
+            return
+        
+        # Save to config
+        device_id = self.hardware.get('id', self.hardware.get('name', 'unknown'))
+        self.config.set(f'ai_training.{device_id}.prepend', text)
+        
+        QMessageBox.information(
+            self,
+            "Saved",
+            f"AI training context saved successfully!\n"
+            f"Total characters: {len(text)}\n\n"
+            f"This context will be used to improve AI understanding of {self.hardware.get('name', 'this device')}."
+        )
+    
+    def clear_training_prepend(self):
+        """Clear training prepend text"""
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear",
+            "Clear all AI training context for this device?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.training_prepend.clear()
+            device_id = self.hardware.get('id', self.hardware.get('name', 'unknown'))
+            self.config.set(f'ai_training.{device_id}.prepend', '')
+    
+    def create_chat_interface(self):
+        """Create chat interface for AI communication"""
+        chat_widget = QWidget()
+        layout = QVBoxLayout(chat_widget)
+        
+        # Chat header with checkbox
+        header_layout = QHBoxLayout()
+        chat_header = QLabel("AI Chat (starcoder:3b)")
+        chat_header.setStyleSheet("font-size: 14px; font-weight: bold;")
+        header_layout.addWidget(chat_header)
+        
+        self.chat_enable_checkbox = QCheckBox("Enable Chat")
+        self.chat_enable_checkbox.setToolTip("Enable chat interface to communicate with starcoder:3b AI model")
+        self.chat_enable_checkbox.stateChanged.connect(self.toggle_chat)
+        header_layout.addWidget(self.chat_enable_checkbox)
+        
+        layout.addLayout(header_layout)
+        
+        # Chat display
+        self.chat_display = QTextBrowser()
+        self.chat_display.setPlaceholderText("Chat is disabled. Check the 'Enable Chat' box to start communicating with AI.")
+        self.chat_display.setEnabled(False)
+        layout.addWidget(self.chat_display)
+        
+        # Input area
+        input_layout = QHBoxLayout()
+        
+        self.chat_input = QLineEdit()
+        self.chat_input.setPlaceholderText("Type your message...")
+        self.chat_input.setEnabled(False)
+        self.chat_input.returnPressed.connect(self.send_chat_message)
+        input_layout.addWidget(self.chat_input)
+        
+        send_btn = QPushButton("Send")
+        send_btn.setEnabled(False)
+        send_btn.clicked.connect(self.send_chat_message)
+        self.chat_send_btn = send_btn
+        input_layout.addWidget(send_btn)
+        
+        layout.addLayout(input_layout)
+        
+        # Clear chat button
+        clear_chat_btn = QPushButton("Clear Chat")
+        clear_chat_btn.clicked.connect(self.clear_chat)
+        layout.addWidget(clear_chat_btn)
+        
+        return chat_widget
+    
+    def toggle_chat(self, state):
+        """Toggle chat interface"""
+        self.chat_enabled = (state == Qt.CheckState.Checked.value)
+        
+        if self.chat_enabled:
+            # Check if AI is available
+            status = self.ollama_manager.get_status()
+            if status['status'] != 'running':
+                QMessageBox.warning(
+                    self,
+                    "AI Not Available",
+                    "Ollama AI service is not running.\n"
+                    "Please start Ollama service and ensure starcoder:3b model is installed."
+                )
+                self.chat_enable_checkbox.setChecked(False)
+                return
+            
+            # Enable chat interface
+            self.chat_display.setEnabled(True)
+            self.chat_input.setEnabled(True)
+            self.chat_send_btn.setEnabled(True)
+            self.chat_display.clear()
+            self.chat_display.append(
+                "<b style='color: green;'>Chat enabled. You can now communicate with starcoder:3b AI.</b><br>"
+                f"<i>Context: {self.hardware.get('name', 'Device')} driver management</i><br><br>"
+            )
+        else:
+            # Disable chat interface
+            self.chat_display.setEnabled(False)
+            self.chat_input.setEnabled(False)
+            self.chat_send_btn.setEnabled(False)
+            self.chat_display.setPlaceholderText("Chat is disabled. Check the 'Enable Chat' box to start.")
+    
+    def send_chat_message(self):
+        """Send message to AI and get response"""
+        message = self.chat_input.text().strip()
+        if not message:
+            return
+        
+        # Display user message
+        self.chat_display.append(f"<b style='color: lightblue;'>You:</b> {message}<br>")
+        self.chat_input.clear()
+        
+        # Get device context
+        device_name = self.hardware.get('name', 'Unknown Device')
+        device_type = self.hardware.get('type', 'Device')
+        current_driver = self.hardware.get('driver', 'No driver')
+        
+        # Build prompt with context
+        context = f"Device: {device_name} ({device_type}), Current driver: {current_driver}"
+        prompt = f"{context}\n\nUser question: {message}\n\nProvide a helpful, concise answer:"
+        
+        # Show thinking indicator
+        self.chat_display.append("<i style='color: gray;'>AI is thinking...</i><br>")
+        self.chat_display.repaint()
+        
+        # Get AI response
+        result = self.ollama_manager.analyze_text(prompt)
+        
+        # Remove thinking indicator
+        cursor = self.chat_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.select(cursor.SelectionType.LineUnderCursor)
+        cursor.removeSelectedText()
+        
+        if result.get('success'):
+            response = result.get('analysis', 'No response')
+            self.chat_display.append(f"<b style='color: lightgreen;'>AI:</b> {response}<br><br>")
+        else:
+            error = result.get('error', 'Unknown error')
+            self.chat_display.append(f"<b style='color: red;'>Error:</b> {error}<br><br>")
+        
+        # Store in history
+        self.chat_history.append({'user': message, 'ai': response if result.get('success') else error})
+    
+    def clear_chat(self):
+        """Clear chat history"""
+        self.chat_display.clear()
+        self.chat_history = []
+        if self.chat_enabled:
+            self.chat_display.append(
+                "<b style='color: green;'>Chat cleared.</b><br>"
+                f"<i>Context: {self.hardware.get('name', 'Device')} driver management</i><br><br>"
+            )
