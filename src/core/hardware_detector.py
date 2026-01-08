@@ -260,14 +260,19 @@ class HardwareDetector:
                         
                         if 'Intel' in line:
                             vendor = 'Intel'
-                            # Extract chipset model
-                            match = re.search(r'Intel.*?(\d{3,4}\s*[A-Z]*\s*(?:Chipset|Series)?)', line)
+                            # Extract chipset model - try multiple patterns
+                            # Pattern 1: Standard chipset naming (e.g., "Z690", "H610")
+                            match = re.search(r'\b([ZBHQX]\d{3,4}[A-Z]*)\b', line)
+                            if not match:
+                                # Pattern 2: Full description with Chipset/Series
+                                match = re.search(r'Intel.*?(\d{3,4}\s*[A-Z]*\s*(?:Chipset|Series))', line)
                             if match:
                                 name = match.group(1)
                         elif 'AMD' in line:
                             vendor = 'AMD'
-                            # Extract chipset model (e.g., X570, B550, X670E)
-                            match = re.search(r'([ABX]\d{3,4}[A-Z]*)', line)
+                            # Extract chipset model with broader pattern
+                            # Covers: X570, B550, A520, X670E, TRX40, WRX80, etc.
+                            match = re.search(r'\b([ABXTW][R]?[X]?\d{3,4}[A-Z]*)\b', line)
                             if match:
                                 name = match.group(1)
                         
@@ -284,7 +289,12 @@ class HardwareDetector:
         Returns dict with compatibility info and manufacturer support URL
         """
         if not vendor or not model:
-            return {'status': 'unknown', 'url': None, 'notes': 'Insufficient information'}
+            return {
+                'status': 'unknown', 
+                'support_url': None, 
+                'drivers_url': None,
+                'notes': 'Insufficient information'
+            }
         
         vendor_lower = vendor.lower()
         
