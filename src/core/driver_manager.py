@@ -7,6 +7,13 @@ from typing import List, Dict, Any
 import subprocess
 from pathlib import Path
 
+# Risk assessment default values
+RISK_OFFICIAL_STABLE = 5
+RISK_STABLE = 10
+RISK_COMMUNITY_STABLE = 10
+RISK_BETA = 20
+RISK_UNKNOWN = 15
+
 class DriverManager:
     """Manages driver operations"""
     
@@ -36,13 +43,13 @@ class DriverManager:
             if 'risk_percentage' not in driver:
                 # Calculate based on stability and source
                 if driver.get('stability') == 'stable' and driver.get('source') == 'official':
-                    driver['risk_percentage'] = 5
+                    driver['risk_percentage'] = RISK_OFFICIAL_STABLE
                 elif driver.get('stability') == 'stable':
-                    driver['risk_percentage'] = 10
+                    driver['risk_percentage'] = RISK_STABLE
                 elif driver.get('stability') == 'beta':
-                    driver['risk_percentage'] = 20
+                    driver['risk_percentage'] = RISK_BETA
                 else:
-                    driver['risk_percentage'] = 15
+                    driver['risk_percentage'] = RISK_UNKNOWN
         
         return drivers
     

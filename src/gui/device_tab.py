@@ -6,10 +6,18 @@ Shows current driver info, available drivers, and AI features
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QGroupBox, QTextEdit,
-    QProgressBar, QComboBox, QMessageBox, QScrollArea
+    QProgressBar, QComboBox, QMessageBox, QScrollArea,
+    QProgressDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
+
+
+# Risk assessment thresholds
+RISK_VERY_LOW_THRESHOLD = 10
+RISK_LOW_THRESHOLD = 30
+RISK_MEDIUM_THRESHOLD = 50
+RISK_HIGH_THRESHOLD = 30  # Threshold for installation warning
 
 
 class DriverInstallWorker(QThread):
@@ -33,7 +41,7 @@ class DriverInstallWorker(QThread):
             self.progress.emit(20, "Assessing risks...")
             risk = self.ollama_manager.assess_risk(self.hardware, self.driver)
             
-            if risk['risk_percentage'] > 30:
+            if risk['risk_percentage'] > RISK_HIGH_THRESHOLD:
                 self.progress.emit(25, f"High risk detected: {risk['risk_percentage']}%")
             
             # Install driver
@@ -385,13 +393,13 @@ Estimated Recovery Time: 2-5 minutes"""
                 
                 self.risk_progress.setValue(risk_percentage)
                 
-                if risk_percentage < 10:
+                if risk_percentage < RISK_VERY_LOW_THRESHOLD:
                     risk_level = "Very Low"
                     color = "green"
-                elif risk_percentage < 30:
+                elif risk_percentage < RISK_LOW_THRESHOLD:
                     risk_level = "Low"
                     color = "lightgreen"
-                elif risk_percentage < 50:
+                elif risk_percentage < RISK_MEDIUM_THRESHOLD:
                     risk_level = "Medium"
                     color = "orange"
                 else:
@@ -452,7 +460,6 @@ Estimated Recovery Time: 2-5 minutes"""
             )
             
             # Create progress dialog
-            from PyQt6.QtWidgets import QProgressDialog
             self.progress_dialog = QProgressDialog(
                 "Installing driver...",
                 "Cancel",

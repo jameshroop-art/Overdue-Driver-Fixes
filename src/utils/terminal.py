@@ -5,6 +5,8 @@ Provides functions for keeping terminal open and managing subprocess output
 
 import subprocess
 import sys
+import os
+import select
 from typing import List, Optional, Any
 
 
@@ -18,7 +20,6 @@ def wait_for_user(message: str = "Press Enter to close...", timeout: Optional[in
     """
     try:
         if timeout:
-            import select
             print(f"\n{message} (timeout in {timeout}s)")
             # Use select for timeout on Unix-like systems
             if hasattr(select, 'select'):
@@ -149,7 +150,6 @@ def keep_terminal_open(func):
 
 def clear_terminal():
     """Clear the terminal screen"""
-    import os
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
