@@ -27,5 +27,33 @@
     "corrections_path": "~/.config/driver-mgt/corrections/",
     "log_format": "plain_text",
     "retention_days": 30
+  },
+  "security": {
+    "domain_whitelist": [
+      "www.asus.com",
+      "asus.com",
+      "www.phoronix.com",
+      "phoronix.com",
+      "dev.to",
+      "github.com",
+      "api.github.com",
+      "huggingface.co",
+      "www.huggingface.co"
+    ],
+    "allowed_paths": [
+      "/support/download-center/",
+      "/review/",
+      "/search/repositories"
+    ],
+    "filesystem_access": {
+      "enabled": false,
+      "allow_on_critical_error_only": true,
+      "allowed_directories": [
+        "~/.config/driver-mgt/logs/",
+        "~/.config/driver-mgt/corrections/",
+        "~/.config/driver-mgt/reports/"
+      ]
+    },
+    "enforce_whitelist": true
   }
 }

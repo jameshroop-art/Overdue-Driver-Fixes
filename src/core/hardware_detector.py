@@ -1,6 +1,7 @@
 """
 Hardware Detection Module
 Detects and identifies hardware components
+Enforces domain whitelist for web searches
 """
 
 import subprocess
@@ -8,6 +9,7 @@ import re
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from utils.terminal import run_with_output
+from utils.security import DomainValidator
 import requests
 
 class HardwareDetector:
@@ -26,6 +28,9 @@ class HardwareDetector:
     def __init__(self, config_manager):
         self.config = config_manager
         self.detected_hardware = []
+        
+        # Initialize domain validator for security
+        self.domain_validator = DomainValidator(config_manager)
     
     def detect_all(self) -> List[Dict[str, Any]]:
         """Detect all hardware components"""
@@ -380,9 +385,14 @@ class HardwareDetector:
         
         # Search for repos if manufacturer not in database
         repos = self._search_manufacturer_repos(vendor, model)
-        if repos:
-            compat_info['repos'] = repos
-            compat_info['notes'] = f'Found {len(repos)} community/manufacturer repos for Linux support.'
+        hf_repos = self._search_huggingface_repos(vendor, model)
+        
+        # Combine both GitHub and HuggingFace results
+        all_repos = repos + hf_repos
+        
+        if all_repos:
+            compat_info['repos'] = all_repos
+            compat_info['notes'] = f'Found {len(all_repos)} community/manufacturer repos for Linux support (GitHub: {len(repos)}, HuggingFace: {len(hf_repos)}).'
         
         return compat_info
     
@@ -395,6 +405,8 @@ class HardwareDetector:
         3. Linux compatibility tools
         
         Returns list of repos with Linux-compatible updates
+        
+        Note: Only searches GitHub which is whitelisted for driver searches
         """
         repos = []
         
@@ -412,8 +424,21 @@ class HardwareDetector:
             
             for search_term in search_terms:
                 try:
+                    # Validate search query (must be driver/chipset related)
+                    is_allowed, reason = self.domain_validator.validate_github_search(search_term)
+                    if not is_allowed:
+                        print(f"⚠ GitHub search blocked: {reason}")
+                        continue
+                    
                     # Use GitHub API to search repos
                     url = "https://api.github.com/search/repositories"
+                    
+                    # Validate URL against whitelist
+                    url_allowed, url_reason = self.domain_validator.is_url_allowed(url)
+                    if not url_allowed:
+                        print(f"⚠ GitHub API access blocked: {url_reason}")
+                        break
+                    
                     params = {
                         'q': search_term,
                         'sort': 'stars',
@@ -508,6 +533,117 @@ class HardwareDetector:
         repos.sort(key=lambda x: (not x['official'], -x['stars']))
         return repos[:10]  # Return top 10
     
+    def _search_huggingface_repos(self, vendor: str, model: str) -> List[Dict[str, Any]]:
+        """Search for manufacturer repos on HuggingFace
+        
+        Searches HuggingFace for:
+        1. Driver-related models/datasets
+        2. Hardware compatibility tools
+        3. Linux firmware collections
+        
+        Returns list of repos with potential Linux-compatible drivers
+        
+        Note: Only searches HuggingFace which is whitelisted for driver searches
+        """
+        repos = []
+        
+        if not vendor:
+            return repos
+        
+        try:
+            # Search terms for HuggingFace
+            search_terms = [
+                f"{vendor} linux driver",
+                f"{vendor} firmware linux",
+                f"{vendor} hardware linux"
+            ]
+            
+            for search_term in search_terms:
+                try:
+                    # Validate search query (must be driver/hardware related)
+                    is_allowed, reason = self.domain_validator.validate_huggingface_search(search_term)
+                    if not is_allowed:
+                        print(f"⚠ HuggingFace search blocked: {reason}")
+                        continue
+                    
+                    # HuggingFace API endpoint for model search
+                    url = "https://huggingface.co/api/models"
+                    
+                    # Validate URL against whitelist
+                    url_allowed, url_reason = self.domain_validator.is_url_allowed(url)
+                    if not url_allowed:
+                        print(f"⚠ HuggingFace API access blocked: {url_reason}")
+                        break
+                    
+                    params = {
+                        'search': search_term,
+                        'limit': 5
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=10)
+                    
+                    # Handle errors
+                    if response.status_code == 429:
+                        print(f"⚠ HuggingFace API rate limit reached")
+                        break
+                    elif response.status_code != 200:
+                        print(f"⚠ HuggingFace API returned status {response.status_code}")
+                        continue
+                    
+                    items = response.json()
+                    
+                    for item in items:
+                        if isinstance(item, dict):
+                            # Extract repo info
+                            repo_id = item.get('modelId', '')
+                            repo_name = repo_id.split('/')[-1] if '/' in repo_id else repo_id
+                            
+                            # Check for relevance (driver/firmware related)
+                            is_relevant = any(keyword in repo_name.lower() or 
+                                            keyword in item.get('tags', [])
+                                            for keyword in ['driver', 'firmware', 'hardware', 'linux'])
+                            
+                            if is_relevant and repo_id:
+                                repo_info = {
+                                    'name': repo_name,
+                                    'full_name': repo_id,
+                                    'url': f"https://huggingface.co/{repo_id}",
+                                    'description': item.get('description', 'No description'),
+                                    'downloads': item.get('downloads', 0),
+                                    'source': 'huggingface'
+                                }
+                                
+                                # Avoid duplicates
+                                if not any(r['url'] == repo_info['url'] for r in repos):
+                                    repos.append(repo_info)
+                        
+                        # Limit to top 5 from HuggingFace
+                        if len(repos) >= 5:
+                            break
+                    
+                    if len(repos) >= 5:
+                        break
+                
+                except requests.exceptions.Timeout:
+                    print(f"⚠ HuggingFace API timeout for search: {search_term}")
+                    continue
+                except requests.exceptions.ConnectionError:
+                    print(f"⚠ Cannot connect to HuggingFace API")
+                    break
+                except requests.exceptions.RequestException as e:
+                    print(f"⚠ HuggingFace API error: {e}")
+                    continue
+                except Exception as e:
+                    print(f"⚠ Error parsing HuggingFace response: {e}")
+                    continue
+        
+        except Exception as e:
+            print(f"Error searching HuggingFace repos: {e}")
+        
+        # Sort by downloads
+        repos.sort(key=lambda x: -x.get('downloads', 0))
+        return repos[:5]  # Return top 5
+    
     def check_bios_updates(self, vendor: str, model: str, current_version: str) -> Dict[str, Any]:
         """Check for BIOS updates from manufacturer
         
@@ -536,8 +672,15 @@ class HardwareDetector:
         
         # Check repos for BIOS updates
         repos = self._search_manufacturer_repos(vendor, model)
-        if repos:
-            bios_repos = [r for r in repos if 'bios' in r['name'].lower() or 'firmware' in r['name'].lower()]
+        
+        # Also check HuggingFace for firmware/driver repos
+        hf_repos = self._search_huggingface_repos(vendor, model)
+        
+        # Combine results
+        all_repos = repos + hf_repos
+        
+        if all_repos:
+            bios_repos = [r for r in all_repos if 'bios' in r['name'].lower() or 'firmware' in r['name'].lower()]
             if bios_repos:
                 result['community_repos'] = bios_repos
                 result['notes'] += f"\n\nFound {len(bios_repos)} community repos with potential BIOS/firmware updates."

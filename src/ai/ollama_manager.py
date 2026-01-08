@@ -1,12 +1,14 @@
 """
 Ollama Manager for AI-assisted driver management
 Handles Ollama integration and starcoder:3b model
+Enforces domain whitelist for security
 """
 
 import subprocess
 import requests
 from typing import Dict, Any
 from utils.terminal import run_with_output
+from utils.security import DomainValidator
 
 class OllamaManager:
     """Manages Ollama AI integration"""
@@ -17,6 +19,9 @@ class OllamaManager:
         self.port = self.config.get_ai('ollama.port', 11434)
         self.model = self.config.get_ai('monitoring.model', 'starcoder:3b')
         self.base_url = f"http://{self.host}:{self.port}"
+        
+        # Initialize domain validator for security
+        self.domain_validator = DomainValidator(config_manager)
     
     def get_status(self) -> Dict[str, Any]:
         """Get Ollama service status"""
@@ -366,6 +371,64 @@ Provide:
             'can_remediate': True,
             'known_issues': []
         }
+    
+    def validate_url_access(self, url: str) -> tuple[bool, str]:
+        """
+        Validate that a URL is allowed by starcoder's whitelist
+        
+        This enforces that starcoder only accesses:
+        - ASUS support/download-center for drivers
+        - Phoronix reviews for hardware compatibility
+        - Dev.to articles for Linux kernel info
+        - GitHub for driver repository searches
+        - HuggingFace for driver repository searches
+        
+        Args:
+            url: URL to validate
+            
+        Returns:
+            Tuple of (is_allowed, reason)
+        """
+        return self.domain_validator.is_url_allowed(url)
+    
+    def validate_github_search(self, query: str) -> tuple[bool, str]:
+        """
+        Validate GitHub search query is for drivers/chipsets
+        
+        Args:
+            query: Search query string
+            
+        Returns:
+            Tuple of (is_allowed, reason)
+        """
+        return self.domain_validator.validate_github_search(query)
+    
+    def validate_huggingface_search(self, query: str) -> tuple[bool, str]:
+        """
+        Validate HuggingFace search query is for drivers/chipsets
+        
+        Args:
+            query: Search query string
+            
+        Returns:
+            Tuple of (is_allowed, reason)
+        """
+        return self.domain_validator.validate_huggingface_search(query)
+    
+    def check_filesystem_access(self, path: str, is_critical_error: bool = False) -> tuple[bool, str]:
+        """
+        Check if starcoder can access filesystem path
+        
+        Starcoder should NOT access filesystem except for critical errors
+        
+        Args:
+            path: Filesystem path
+            is_critical_error: True if this is for critical error handling
+            
+        Returns:
+            Tuple of (is_allowed, reason)
+        """
+        return self.domain_validator.is_filesystem_access_allowed(path, is_critical_error)
     
     def monitor_driver(self, hardware: Dict[str, Any]) -> Dict[str, Any]:
         """Monitor driver operation in real-time"""
