@@ -58,12 +58,15 @@ class DriverManager:
         drivers = []
         
         # Official NVIDIA drivers
+        # Modern NVIDIA drivers (390+) use GLVND (shimmed)
         drivers.append({
             'name': 'nvidia-driver-535',
             'version': '535.xx',
             'source': 'official',
             'stability': 'stable',
-            'description': 'NVIDIA Official Driver 535'
+            'description': 'NVIDIA Official Driver 535',
+            'shimmed': True,  # Uses GLVND
+            'glvnd': True
         })
         
         drivers.append({
@@ -71,7 +74,9 @@ class DriverManager:
             'version': '545.xx',
             'source': 'official',
             'stability': 'beta',
-            'description': 'NVIDIA Official Driver 545 (Beta)'
+            'description': 'NVIDIA Official Driver 545 (Beta)',
+            'shimmed': True,  # Uses GLVND
+            'glvnd': True
         })
         
         # Open source nouveau
@@ -80,7 +85,9 @@ class DriverManager:
             'version': 'latest',
             'source': 'community',
             'stability': 'stable',
-            'description': 'Nouveau Open Source Driver'
+            'description': 'Nouveau Open Source Driver',
+            'shimmed': False,  # Does not use GLVND shim layer
+            'glvnd': False
         })
         
         return drivers
@@ -95,7 +102,9 @@ class DriverManager:
             'version': 'latest',
             'source': 'official',
             'stability': 'stable',
-            'description': 'AMD Official Open Source Driver'
+            'description': 'AMD Official Open Source Driver',
+            'shimmed': True,  # Uses GLVND
+            'glvnd': True
         })
         
         # AMDGPU-PRO
@@ -104,7 +113,9 @@ class DriverManager:
             'version': 'latest',
             'source': 'official',
             'stability': 'stable',
-            'description': 'AMD Professional Driver'
+            'description': 'AMD Professional Driver',
+            'shimmed': True,  # Uses GLVND
+            'glvnd': True
         })
         
         return drivers
@@ -119,7 +130,9 @@ class DriverManager:
             'version': 'kernel',
             'source': 'distribution',
             'stability': 'stable',
-            'description': 'Intel i915 Kernel Driver'
+            'description': 'Intel i915 Kernel Driver',
+            'shimmed': False,  # Kernel driver, not using GLVND shim
+            'glvnd': False
         })
         
         return drivers
@@ -179,7 +192,9 @@ class DriverManager:
         """Install a driver (requires root privileges)"""
         # This would perform actual installation
         # For now, it's a placeholder
+        shimmed_status = "Yes (GLVND)" if driver.get('shimmed', False) else "No"
         print(f"Would install driver: {driver['name']} for {hardware['name']}")
+        print(f"Is this installation shimmed? {shimmed_status}")
         return True
     
     def get_current_driver(self, hardware: Dict[str, Any]) -> Dict[str, Any]:

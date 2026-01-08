@@ -15,6 +15,11 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "Script directory: $SCRIPT_DIR"
+cd "$SCRIPT_DIR"
+
 # Detect distribution and package manager
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -85,6 +90,31 @@ su - "$ACTUAL_USER" -c "mkdir -p $ACTUAL_HOME/.config/driver-mgt/{profiles,curve
 
 echo ""
 echo "Installing driver-mgt..."
+
+# Verify required files exist
+echo "Verifying required files..."
+REQUIRED_FILES=("src" "config" "driver-mgt" "requirements.txt" "setup.py")
+MISSING_FILES=()
+
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -e "$file" ]; then
+        MISSING_FILES+=("$file")
+    fi
+done
+
+if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+    echo "✗ Error: Required files/directories not found:"
+    for file in "${MISSING_FILES[@]}"; do
+        echo "  - $file"
+    done
+    echo ""
+    echo "Current directory: $(pwd)"
+    echo "Please run this script from the driver-mgt repository root directory."
+    exit 1
+fi
+
+echo "✓ All required files found"
+
 INSTALL_DIR="/opt/driver-mgt"
 mkdir -p "$INSTALL_DIR"
 cp -r src config driver-mgt requirements.txt setup.py "$INSTALL_DIR/"
