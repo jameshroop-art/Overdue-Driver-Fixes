@@ -156,6 +156,34 @@ class ConfigManager:
                 "localhost_only": True,
                 "no_external_transmission": True,
                 "user_consent_required": True
+            },
+            "security": {
+                "domain_whitelist": [
+                    "www.asus.com",
+                    "asus.com",
+                    "www.phoronix.com",
+                    "phoronix.com",
+                    "dev.to",
+                    "github.com",
+                    "api.github.com",
+                    "huggingface.co",
+                    "www.huggingface.co"
+                ],
+                "allowed_paths": [
+                    "/support/download-center/",
+                    "/review/",
+                    "/search/repositories"
+                ],
+                "filesystem_access": {
+                    "enabled": False,
+                    "allow_on_critical_error_only": True,
+                    "allowed_directories": [
+                        "~/.config/driver-mgt/logs/",
+                        "~/.config/driver-mgt/corrections/",
+                        "~/.config/driver-mgt/reports/"
+                    ]
+                },
+                "enforce_whitelist": True
             }
         }
     

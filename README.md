@@ -492,6 +492,43 @@ When enabled, Ollama (starcoder:3b only) monitors driver operations:
 - Full audit trail of AI operations stored locally
 - User maintains complete control over all data
 
+### Starcoder Domain Boundaries & Security
+**starcoder:3b is restricted to access ONLY whitelisted domains:**
+
+**Allowed Domains:**
+- **ASUS Support**: `https://www.asus.com/support/download-center/`
+  - For downloading chipset drivers, BIOS updates, Wi-Fi 6 drivers, and Ethernet drivers
+- **Phoronix Reviews**: `https://www.phoronix.com/review/`
+  - For hardware compatibility information and Linux performance reviews
+  - Example: `https://www.phoronix.com/review/amd-ryzen-7-9800x3d-linux`
+- **Dev.to Articles**: `https://dev.to/`
+  - For Linux kernel updates and hardware support information
+  - Example: `https://dev.to/nolunchbreaks_22/linux-kernel-613-breaking-new-ground-in-hardware-support-and-system-performance-15g1`
+- **GitHub.com**: `https://github.com` and `https://api.github.com`
+  - For searching Linux-compatible driver repositories
+  - For checking community-maintained drivers and firmware
+- **HuggingFace.co**: `https://huggingface.co`
+  - For searching driver and firmware repositories
+  - For Linux-compatible hardware support resources
+
+**Filesystem Access Restrictions:**
+- **Starcoder does NOT access the filesystem** except for critical errors
+- Only allowed directories (when critical error occurs):
+  - `~/.config/driver-mgt/logs/` - Error logging
+  - `~/.config/driver-mgt/corrections/` - Correction event logs
+  - `~/.config/driver-mgt/reports/` - Manufacturer reports
+- All filesystem access is logged and auditable
+
+**Purpose of starcoder:**
+- Watch driver wellbeing and operations
+- Monitor for driver upgrades and updates
+- Ensure better functionality within Linux systems
+- Document processes for reversibility if failure occurs
+- Provide risk assessment and remediation capabilities
+
+**Security Enforcement:**
+All web requests and filesystem access are validated against the whitelist before execution. Unauthorized access attempts are blocked and logged.
+
 ## 🔧 Advanced Usage
 
 ### AI-Assisted Driver Installation
