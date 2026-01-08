@@ -198,7 +198,7 @@ class HardwareDetector:
         return info
     
     def _detect_motherboard(self) -> List[Dict[str, Any]]:
-        """Detect motherboard/chipset"""
+        """Detect motherboard/chipset with BIOS information"""
         boards = []
         
         try:
@@ -207,20 +207,156 @@ class HardwareDetector:
             if dmi_path.exists():
                 board_vendor = self._read_dmi_file(dmi_path / 'board_vendor')
                 board_name = self._read_dmi_file(dmi_path / 'board_name')
+                board_version = self._read_dmi_file(dmi_path / 'board_version')
+                
+                # Read BIOS information
+                bios_vendor = self._read_dmi_file(dmi_path / 'bios_vendor')
+                bios_version = self._read_dmi_file(dmi_path / 'bios_version')
+                bios_date = self._read_dmi_file(dmi_path / 'bios_date')
                 
                 if board_vendor and board_name:
-                    boards.append({
+                    # Detect chipset from lspci
+                    chipset_info = self._detect_chipset()
+                    
+                    board_info = {
                         'type': 'Motherboard',
                         'name': f"{board_vendor} {board_name}",
                         'vendor': board_vendor,
                         'model': board_name,
-                        'driver': None
-                    })
+                        'board_version': board_version,
+                        'bios_vendor': bios_vendor,
+                        'bios_version': bios_version,
+                        'bios_date': bios_date,
+                        'chipset': chipset_info.get('name', 'Unknown') if chipset_info else 'Unknown',
+                        'chipset_vendor': chipset_info.get('vendor', 'Unknown') if chipset_info else 'Unknown',
+                        'driver': None,
+                        'linux_compatible': self._check_linux_compatibility(board_vendor, board_name)
+                    }
+                    boards.append(board_info)
         
         except Exception as e:
             print(f"Error detecting motherboard: {e}")
         
         return boards
+    
+    def _detect_chipset(self) -> Dict[str, Any]:
+        """Detect motherboard chipset from lspci"""
+        try:
+            show_output = self.config.get('cli.show_subprocess_output', False)
+            result = run_with_output(
+                ['lspci'],
+                show_output=show_output,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    # Look for host bridge, ISA bridge, or LPC bridge
+                    if any(keyword in line.lower() for keyword in ['host bridge', 'isa bridge', 'lpc']):
+                        # Extract chipset info
+                        vendor = None
+                        name = line
+                        
+                        if 'Intel' in line:
+                            vendor = 'Intel'
+                            # Extract chipset model
+                            match = re.search(r'Intel.*?(\d{3,4}\s*[A-Z]*\s*(?:Chipset|Series)?)', line)
+                            if match:
+                                name = match.group(1)
+                        elif 'AMD' in line:
+                            vendor = 'AMD'
+                            # Extract chipset model (e.g., X570, B550, X670E)
+                            match = re.search(r'([ABX]\d{3,4}[A-Z]*)', line)
+                            if match:
+                                name = match.group(1)
+                        
+                        if vendor:
+                            return {'vendor': vendor, 'name': name}
+        except Exception as e:
+            print(f"Error detecting chipset: {e}")
+        
+        return None
+    
+    def _check_linux_compatibility(self, vendor: str, model: str) -> Dict[str, Any]:
+        """Check Linux compatibility for motherboard manufacturer
+        
+        Returns dict with compatibility info and manufacturer support URL
+        """
+        if not vendor or not model:
+            return {'status': 'unknown', 'url': None, 'notes': 'Insufficient information'}
+        
+        vendor_lower = vendor.lower()
+        
+        # Manufacturer Linux support information
+        manufacturer_info = {
+            'asus': {
+                'name': 'ASUS',
+                'linux_support': 'Good',
+                'support_url': 'https://www.asus.com/support/',
+                'drivers_url': 'https://www.asus.com/support/download-center/',
+                'notes': 'ASUS provides Linux drivers for most motherboards. Check support site for specific model.'
+            },
+            'msi': {
+                'name': 'MSI',
+                'linux_support': 'Good',
+                'support_url': 'https://www.msi.com/support',
+                'drivers_url': 'https://www.msi.com/support/download',
+                'notes': 'MSI motherboards generally work well with Linux. Some RGB/fan control may need third-party tools.'
+            },
+            'gigabyte': {
+                'name': 'Gigabyte',
+                'linux_support': 'Good',
+                'support_url': 'https://www.gigabyte.com/Support',
+                'drivers_url': 'https://www.gigabyte.com/Support/Motherboard',
+                'notes': 'Gigabyte motherboards have good Linux compatibility. Check for chipset driver support.'
+            },
+            'asrock': {
+                'name': 'ASRock',
+                'linux_support': 'Good',
+                'support_url': 'https://www.asrock.com/support/',
+                'drivers_url': 'https://www.asrock.com/support/download.asp',
+                'notes': 'ASRock motherboards work well with Linux. Most features supported out-of-box.'
+            },
+            'evga': {
+                'name': 'EVGA',
+                'linux_support': 'Moderate',
+                'support_url': 'https://www.evga.com/support/',
+                'drivers_url': 'https://www.evga.com/support/download/',
+                'notes': 'EVGA motherboards generally compatible. Some utilities Windows-only.'
+            },
+            'biostar': {
+                'name': 'Biostar',
+                'linux_support': 'Moderate',
+                'support_url': 'https://www.biostar.com.tw/app/en/support/',
+                'drivers_url': 'https://www.biostar.com.tw/app/en/support/download.php',
+                'notes': 'Basic Linux support. Most hardware works but limited manufacturer utilities.'
+            }
+        }
+        
+        # Try to match vendor
+        for key, info in manufacturer_info.items():
+            if key in vendor_lower or info['name'].lower() in vendor_lower:
+                return {
+                    'status': 'supported',
+                    'manufacturer': info['name'],
+                    'linux_support': info['linux_support'],
+                    'support_url': info['support_url'],
+                    'drivers_url': info['drivers_url'],
+                    'notes': info['notes'],
+                    'model': model
+                }
+        
+        # Unknown manufacturer
+        return {
+            'status': 'unknown',
+            'manufacturer': vendor,
+            'linux_support': 'Unknown',
+            'support_url': None,
+            'drivers_url': None,
+            'notes': f'Linux compatibility for {vendor} motherboards not verified. Check manufacturer website.',
+            'model': model
+        }
     
     def _read_dmi_file(self, path: Path) -> str:
         """Read DMI file content"""

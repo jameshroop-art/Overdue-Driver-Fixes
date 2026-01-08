@@ -159,10 +159,19 @@ class DeviceTab(QWidget):
         group = QGroupBox("Device Information")
         layout = QVBoxLayout()
         
-        info_table = QTableWidget(5, 2)
+        # Check if this is a motherboard to show additional info
+        is_motherboard = self.hardware.get('type') == 'Motherboard'
+        
+        if is_motherboard:
+            # Extended info for motherboard
+            row_count = 9  # More rows for BIOS, chipset, compatibility
+        else:
+            row_count = 5
+        
+        info_table = QTableWidget(row_count, 2)
         info_table.setHorizontalHeaderLabels(["Property", "Value"])
         info_table.verticalHeader().setVisible(False)
-        info_table.setMaximumHeight(200)
+        info_table.setMaximumHeight(200 if not is_motherboard else 350)
         
         properties = [
             ("Type", self.hardware.get('type', 'Unknown')),
@@ -172,6 +181,15 @@ class DeviceTab(QWidget):
             ("Model", self.hardware.get('model', self.hardware.get('name', 'N/A')))
         ]
         
+        # Add motherboard-specific information
+        if is_motherboard:
+            properties.extend([
+                ("BIOS Version", self.hardware.get('bios_version', 'N/A')),
+                ("BIOS Date", self.hardware.get('bios_date', 'N/A')),
+                ("Chipset", self.hardware.get('chipset', 'Unknown')),
+                ("Linux Support", self.hardware.get('linux_compatible', {}).get('linux_support', 'Unknown'))
+            ])
+        
         for i, (key, value) in enumerate(properties):
             info_table.setItem(i, 0, QTableWidgetItem(key))
             info_table.setItem(i, 1, QTableWidgetItem(str(value)))
@@ -179,8 +197,72 @@ class DeviceTab(QWidget):
         info_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(info_table)
         
+        # Add Linux compatibility info for motherboards
+        if is_motherboard:
+            compat_info = self.hardware.get('linux_compatible', {})
+            if compat_info.get('status') == 'supported':
+                compat_widget = self._create_compatibility_widget(compat_info)
+                layout.addWidget(compat_widget)
+        
         group.setLayout(layout)
         return group
+    
+    def _create_compatibility_widget(self, compat_info):
+        """Create widget showing Linux compatibility information"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Title
+        title = QLabel("🐧 Linux Compatibility")
+        title.setStyleSheet("font-weight: bold; font-size: 12px;")
+        layout.addWidget(title)
+        
+        # Support status
+        support_level = compat_info.get('linux_support', 'Unknown')
+        support_label = QLabel(f"Support Level: {support_level}")
+        
+        # Color code based on support level
+        if support_level == 'Good':
+            support_label.setStyleSheet("color: green;")
+        elif support_level == 'Moderate':
+            support_label.setStyleSheet("color: orange;")
+        else:
+            support_label.setStyleSheet("color: gray;")
+        
+        layout.addWidget(support_label)
+        
+        # Notes
+        notes = compat_info.get('notes', '')
+        if notes:
+            notes_label = QLabel(notes)
+            notes_label.setWordWrap(True)
+            notes_label.setStyleSheet("font-size: 10px; color: gray;")
+            layout.addWidget(notes_label)
+        
+        # Links to manufacturer support
+        if compat_info.get('support_url'):
+            link_layout = QHBoxLayout()
+            
+            support_btn = QPushButton("Manufacturer Support")
+            support_btn.clicked.connect(lambda: self._open_url(compat_info.get('support_url')))
+            link_layout.addWidget(support_btn)
+            
+            if compat_info.get('drivers_url'):
+                drivers_btn = QPushButton("Download Drivers")
+                drivers_btn.clicked.connect(lambda: self._open_url(compat_info.get('drivers_url')))
+                link_layout.addWidget(drivers_btn)
+            
+            link_layout.addStretch()
+            layout.addLayout(link_layout)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def _open_url(self, url):
+        """Open URL in default browser"""
+        import webbrowser
+        webbrowser.open(url)
     
     def create_current_driver_section(self):
         """Create current driver information section"""
