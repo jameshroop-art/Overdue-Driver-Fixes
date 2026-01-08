@@ -202,7 +202,10 @@ class DriverManager:
         """Install a driver (requires root privileges)"""
         # This would perform actual installation
         # For now, it's a placeholder
-        shimmed_status = "No" if not driver.get('shimmed', False) else "Yes (GLVND)"
+        if driver.get('shimmed', False):
+            shimmed_status = "Yes (GLVND)" if driver.get('glvnd', False) else "Yes"
+        else:
+            shimmed_status = "No"
         print(f"Would install driver: {driver['name']} for {hardware['name']}")
         print(f"Is this installation shimmed? {shimmed_status}")
         return True
