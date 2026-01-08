@@ -56,8 +56,8 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     else
         # General Debian/Ubuntu packages
         apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode \
-                           libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libgl1-mesa-glx \
-                           libegl1
+                           libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
+                           libxcb-cursor0 libegl1
     fi
     
     # Check Python version

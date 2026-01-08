@@ -10,8 +10,9 @@ import argparse
 from pathlib import Path
 
 # Set Qt platform plugin environment variable for headless/CI environments
-# This allows the application to run without X11 display server
-if 'DISPLAY' not in os.environ and 'QT_QPA_PLATFORM' not in os.environ:
+# This allows the application to run without X11 or Wayland display server
+if ('DISPLAY' not in os.environ and 'WAYLAND_DISPLAY' not in os.environ 
+    and 'QT_QPA_PLATFORM' not in os.environ):
     os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 # Add src directory to path
@@ -239,8 +240,12 @@ def main():
         # Re-raise SystemExit to allow proper exit
         raise
     except Exception as e:
-        error_msg = str(e)
-        if 'xcb' in error_msg.lower() or 'platform plugin' in error_msg.lower() or 'aborted' in error_msg.lower():
+        error_msg = str(e).lower()
+        # Check for Qt platform plugin related errors
+        qt_error_patterns = ['xcb', 'platform plugin', 'qt.qpa', 'libegl', 'libxcb']
+        is_qt_error = any(pattern in error_msg for pattern in qt_error_patterns)
+        
+        if is_qt_error:
             print("Qt platform plugin error detected.")
             print("This may be due to missing system libraries or running in a headless environment.")
             print("")
@@ -252,7 +257,7 @@ def main():
             print("  2. Or run in CLI mode with commands like: driver-mgt status")
             print("  3. For headless/CI environments, set: export QT_QPA_PLATFORM=offscreen")
             print("")
-            print(f"Error details: {error_msg}")
+            print(f"Error details: {e}")
         else:
             print(f"Error launching GUI: {e}")
             print("Try running in CLI mode with commands like: driver-mgt status")
