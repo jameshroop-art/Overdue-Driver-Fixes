@@ -27,11 +27,7 @@ setup(
         'requests>=2.28.0',
         'pyyaml>=6.0',
     ],
-    entry_points={
-        'console_scripts': [
-            'driver-mgt=driver-mgt:main',
-        ],
-    },
+    scripts=['driver-mgt'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: End Users/Desktop',

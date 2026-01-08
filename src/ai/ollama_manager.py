@@ -88,9 +88,13 @@ class OllamaManager:
                 'error': 'Ollama not available'
             }
         
+        # Sanitize error log to prevent prompt injection
+        # Limit length and remove potential injection patterns
+        sanitized_log = self._sanitize_log(error_log)
+        
         prompt = f"""Analyze this driver installation error and suggest remediation:
 
-{error_log}
+{sanitized_log}
 
 Provide:
 1. Root cause
@@ -153,3 +157,16 @@ Provide:
                 print("Ollama service stopped")
             except Exception as e:
                 print(f"Error stopping Ollama: {e}")
+    
+    def _sanitize_log(self, log: str) -> str:
+        """Sanitize log content to prevent prompt injection"""
+        # Limit length to prevent abuse
+        max_length = 5000
+        if len(log) > max_length:
+            log = log[:max_length] + "... (truncated)"
+        
+        # Remove potential prompt injection patterns
+        # Keep only printable ASCII and common whitespace
+        sanitized = ''.join(char for char in log if char.isprintable() or char in '\n\r\t')
+        
+        return sanitized

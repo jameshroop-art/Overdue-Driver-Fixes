@@ -11,6 +11,16 @@ from pathlib import Path
 class HardwareDetector:
     """Detects hardware components in the system"""
     
+    # Vendor detection mapping
+    VENDOR_PATTERNS = {
+        'NVIDIA': ['NVIDIA', 'nvidia'],
+        'AMD': ['AMD', 'ATI', 'Radeon'],
+        'Intel': ['Intel'],
+        'Realtek': ['Realtek', 'RTL'],
+        'MediaTek': ['MediaTek', 'MT'],
+        'Broadcom': ['Broadcom'],
+    }
+    
     def __init__(self, config_manager):
         self.config = config_manager
         self.detected_hardware = []
@@ -71,31 +81,32 @@ class HardwareDetector:
             'id': None
         }
         
-        # Extract vendor and name
-        if 'NVIDIA' in main_line:
-            info['vendor'] = 'NVIDIA'
-            # Extract model name
-            match = re.search(r'NVIDIA.*?(\[.*?\])', main_line)
-            if match:
-                info['name'] = match.group(1).strip('[]')
-            else:
-                info['name'] = 'NVIDIA GPU'
-        
-        elif 'AMD' in main_line or 'ATI' in main_line:
-            info['vendor'] = 'AMD'
-            match = re.search(r'(Radeon.*?)(\[|$)', main_line)
-            if match:
-                info['name'] = match.group(1).strip()
-            else:
-                info['name'] = 'AMD GPU'
-        
-        elif 'Intel' in main_line:
-            info['vendor'] = 'Intel'
-            match = re.search(r'Intel.*?Graphics.*?(\[.*?\])', main_line)
-            if match:
-                info['name'] = match.group(1).strip('[]')
-            else:
-                info['name'] = 'Intel GPU'
+        # Detect vendor using patterns
+        vendor = self._detect_vendor(main_line)
+        if vendor:
+            info['vendor'] = vendor
+            
+            # Extract model name based on vendor
+            if vendor == 'NVIDIA':
+                match = re.search(r'NVIDIA.*?(\[.*?\])', main_line)
+                if match:
+                    info['name'] = match.group(1).strip('[]')
+                else:
+                    info['name'] = 'NVIDIA GPU'
+            
+            elif vendor == 'AMD':
+                match = re.search(r'(Radeon.*?)(\[|$)', main_line)
+                if match:
+                    info['name'] = match.group(1).strip()
+                else:
+                    info['name'] = 'AMD GPU'
+            
+            elif vendor == 'Intel':
+                match = re.search(r'Intel.*?Graphics.*?(\[.*?\])', main_line)
+                if match:
+                    info['name'] = match.group(1).strip('[]')
+                else:
+                    info['name'] = 'Intel GPU'
         
         # Extract PCI ID
         match = re.search(r'^([0-9a-f:\.]+)', main_line)
@@ -147,26 +158,20 @@ class HardwareDetector:
             'id': None
         }
         
-        # Extract vendor
-        if 'Intel' in main_line:
-            info['vendor'] = 'Intel'
-            match = re.search(r'Intel.*?(Wi-Fi.*?)(\[|$)', main_line)
-            if match:
-                info['name'] = match.group(1).strip()
+        # Detect vendor using patterns
+        vendor = self._detect_vendor(main_line)
+        if vendor:
+            info['vendor'] = vendor
+            
+            # Set name based on vendor
+            if vendor == 'Intel':
+                match = re.search(r'Intel.*?(Wi-Fi.*?)(\[|$)', main_line)
+                if match:
+                    info['name'] = match.group(1).strip()
+                else:
+                    info['name'] = 'Intel WiFi Adapter'
             else:
-                info['name'] = 'Intel WiFi Adapter'
-        
-        elif 'Realtek' in main_line or 'RTL' in main_line:
-            info['vendor'] = 'Realtek'
-            info['name'] = 'Realtek WiFi Adapter'
-        
-        elif 'MediaTek' in main_line or 'MT' in main_line:
-            info['vendor'] = 'MediaTek'
-            info['name'] = 'MediaTek WiFi Adapter'
-        
-        elif 'Broadcom' in main_line:
-            info['vendor'] = 'Broadcom'
-            info['name'] = 'Broadcom WiFi Adapter'
+                info['name'] = f'{vendor} WiFi Adapter'
         
         # Extract PCI ID
         match = re.search(r'^([0-9a-f:\.]+)', main_line)
@@ -231,3 +236,10 @@ class HardwareDetector:
     def get_hardware_by_vendor(self, vendor: str) -> List[Dict[str, Any]]:
         """Get hardware by vendor"""
         return [hw for hw in self.detected_hardware if hw.get('vendor') == vendor]
+    
+    def _detect_vendor(self, text: str) -> str:
+        """Detect vendor from text using pattern mapping"""
+        for vendor, patterns in self.VENDOR_PATTERNS.items():
+            if any(pattern in text for pattern in patterns):
+                return vendor
+        return 'Unknown'

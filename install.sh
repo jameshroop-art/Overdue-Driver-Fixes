@@ -48,7 +48,13 @@ pip3 install -r requirements.txt
 echo ""
 echo "Creating configuration directories..."
 mkdir -p /etc/driver-mgt
-mkdir -p ~/.config/driver-mgt/{profiles,curves,logs,corrections,reports}
+
+# Get the actual user (not root)
+ACTUAL_USER="${SUDO_USER:-$USER}"
+ACTUAL_HOME=$(getent passwd "$ACTUAL_USER" | cut -d: -f6)
+
+# Create user config directories as the actual user
+su - "$ACTUAL_USER" -c "mkdir -p $ACTUAL_HOME/.config/driver-mgt/{profiles,curves,logs,corrections,reports}"
 
 echo ""
 echo "Installing driver-mgt..."

@@ -11,6 +11,9 @@ from typing import Dict, Any
 class ConfigManager:
     """Manages application configuration"""
     
+    # Path to config templates (relative to package root)
+    CONFIG_TEMPLATE_DIR = Path(__file__).parent.parent.parent / 'config'
+    
     def __init__(self):
         self.config_dir = Path.home() / '.config' / 'driver-mgt'
         self.config_file = self.config_dir / 'config.json'
@@ -44,7 +47,7 @@ class ConfigManager:
                 return json.load(f)
         else:
             # Load default configuration from template
-            template_path = Path(__file__).parent.parent.parent / 'config' / 'config.json.template'
+            template_path = self.CONFIG_TEMPLATE_DIR / 'config.json.template'
             if template_path.exists():
                 with open(template_path, 'r') as f:
                     config = json.load(f)
@@ -62,7 +65,7 @@ class ConfigManager:
                 return json.load(f)
         else:
             # Load default AI configuration from template
-            template_path = Path(__file__).parent.parent.parent / 'config' / 'ai-config.json.template'
+            template_path = self.CONFIG_TEMPLATE_DIR / 'ai-config.json.template'
             if template_path.exists():
                 with open(template_path, 'r') as f:
                     config = json.load(f)
