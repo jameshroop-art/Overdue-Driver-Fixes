@@ -42,10 +42,6 @@ elif [ "$PKG_MANAGER" = "pacman" ]; then
 fi
 
 echo ""
-echo "Installing Python packages..."
-pip3 install -r requirements.txt
-
-echo ""
 echo "Creating configuration directories..."
 mkdir -p /etc/driver-mgt
 
@@ -60,7 +56,7 @@ echo ""
 echo "Installing driver-mgt..."
 INSTALL_DIR="/opt/driver-mgt"
 mkdir -p "$INSTALL_DIR"
-cp -r src config driver-mgt requirements.txt "$INSTALL_DIR/"
+cp -r src config driver-mgt requirements.txt setup.py "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/driver-mgt"
 
 echo ""
@@ -68,10 +64,26 @@ echo "Creating virtual environment..."
 cd "$INSTALL_DIR"
 python3 -m venv venv
 
+if [ ! -f "$INSTALL_DIR/venv/bin/python" ]; then
+    echo "✗ Failed to create virtual environment"
+    exit 1
+fi
+
 echo ""
 echo "Installing Python packages into venv..."
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
-"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
+if ! "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"; then
+    echo "✗ Failed to install Python packages"
+    exit 1
+fi
+
+echo ""
+echo "Verifying installation..."
+if ! "$INSTALL_DIR/venv/bin/python" -c "import PyQt6, psutil, requests, yaml" 2>/dev/null; then
+    echo "⚠ Warning: Some dependencies may not be properly installed"
+    echo "  Attempting to install again..."
+    "$INSTALL_DIR/venv/bin/pip" install --force-reinstall -r "$INSTALL_DIR/requirements.txt"
+fi
 
 # Create symlink
 ln -sf "$INSTALL_DIR/driver-mgt" /usr/local/bin/driver-mgt
@@ -95,9 +107,23 @@ echo ""
 echo "A virtual environment has been created at $INSTALL_DIR/venv"
 echo "The application will automatically use this venv when started."
 echo ""
+
+# Test the installation
+echo "Testing installation..."
+if "$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/driver-mgt" --check-deps --no-venv --no-keep-open 2>&1 | grep -q "All dependencies installed"; then
+    echo "✓ All dependencies verified successfully"
+else
+    echo "⚠ Warning: Some dependencies may not be properly installed"
+    echo "  You can check with: driver-mgt --check-deps"
+fi
+
+echo ""
 echo "You can now run driver-mgt with:"
 echo "  driver-mgt         (GUI mode)"
 echo "  driver-mgt status  (CLI mode)"
+echo ""
+echo "Configuration files are stored in:"
+echo "  $ACTUAL_HOME/.config/driver-mgt/"
 echo ""
 echo "Optional: Install Ollama for AI-assisted management"
 echo "  Visit: https://ollama.ai"
