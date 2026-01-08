@@ -9,6 +9,12 @@ import os
 import argparse
 from pathlib import Path
 
+# Set Qt platform plugin environment variable for headless/CI environments
+# This allows the application to run without X11 or Wayland display server
+if ('DISPLAY' not in os.environ and 'WAYLAND_DISPLAY' not in os.environ 
+    and 'QT_QPA_PLATFORM' not in os.environ):
+    os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
@@ -111,6 +117,18 @@ def wait_for_user_input(message="Press Enter to close..."):
         print("\n")
         pass
 
+def can_use_gui():
+    """Check if GUI can be initialized"""
+    # If offscreen platform is set, we can't show GUI
+    if os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
+        return False
+    
+    # If no DISPLAY and no QT_QPA_PLATFORM, can't use GUI
+    if 'DISPLAY' not in os.environ and 'WAYLAND_DISPLAY' not in os.environ:
+        return False
+    
+    return True
+
 def main():
     """Main application entry point"""
     args = parse_arguments()
@@ -184,7 +202,23 @@ def main():
         return
     
     # Launch GUI by default
+    if not can_use_gui():
+        print("GUI cannot be initialized (no display server detected).")
+        print("Running in CLI mode. Available commands:")
+        print("  driver-mgt status       - Check system status")
+        print("  driver-mgt scan         - Scan for hardware and drivers")
+        print("  driver-mgt --check-deps - Check dependencies")
+        print("")
+        print("To use GUI mode:")
+        print("  1. Ensure X11 or Wayland is running")
+        print("  2. Set DISPLAY environment variable")
+        if args.keep_open:
+            wait_for_user_input()
+        sys.exit(0)
+    
     try:
+        # Try to import and create QApplication
+        # This will fail if Qt platform plugin can't be initialized
         from PyQt6.QtWidgets import QApplication
         from gui.main_window import MainWindow
         
@@ -196,9 +230,37 @@ def main():
         window.show()
         
         sys.exit(app.exec())
-    except ImportError:
+    except ImportError as e:
         print("PyQt6 is not installed. Install it with: pip3 install PyQt6")
         print("Or use CLI mode with commands like: driver-mgt status")
+        if args.keep_open:
+            wait_for_user_input()
+        sys.exit(1)
+    except SystemExit:
+        # Re-raise SystemExit to allow proper exit
+        raise
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check for Qt platform plugin related errors
+        qt_error_patterns = ['xcb', 'platform plugin', 'qt.qpa', 'libegl', 'libxcb']
+        is_qt_error = any(pattern in error_msg for pattern in qt_error_patterns)
+        
+        if is_qt_error:
+            print("Qt platform plugin error detected.")
+            print("This may be due to missing system libraries or running in a headless environment.")
+            print("")
+            print("To fix:")
+            print("  1. Install required libraries:")
+            print("     Debian/Ubuntu: sudo apt-get install libxcb-cursor0 libxkbcommon-x11-0 libegl1")
+            print("     Fedora: sudo dnf install libxcb xcb-util-cursor libxkbcommon-x11 mesa-libEGL")
+            print("     Arch: sudo pacman -S libxcb xcb-util-cursor libxkbcommon-x11 libglvnd")
+            print("  2. Or run in CLI mode with commands like: driver-mgt status")
+            print("  3. For headless/CI environments, set: export QT_QPA_PLATFORM=offscreen")
+            print("")
+            print(f"Error details: {e}")
+        else:
+            print(f"Error launching GUI: {e}")
+            print("Try running in CLI mode with commands like: driver-mgt status")
         if args.keep_open:
             wait_for_user_input()
         sys.exit(1)
