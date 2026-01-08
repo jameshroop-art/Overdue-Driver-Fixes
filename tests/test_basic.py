@@ -112,6 +112,42 @@ def test_ollama_manager():
     
     print(f"✓ OllamaManager tests passed (status: {status['status']})")
 
+def test_ram_optimizer():
+    """Test RAMOptimizer"""
+    from core.config import ConfigManager
+    from ai.ollama_manager import OllamaManager
+    from core.ram_optimizer import RAMOptimizer
+    
+    config = ConfigManager()
+    ollama = OllamaManager(config)
+    optimizer = RAMOptimizer(config, ollama)
+    
+    assert optimizer is not None
+    
+    # Test RAM optimization with fake data
+    fake_ram = {
+        'type': 'RAM',
+        'total_gb': 32.0,
+        'ram_type': 'DDR5',
+        'speed_mhz': 6000
+    }
+    
+    fake_cpu = {
+        'type': 'CPU',
+        'vendor': 'AMD',
+        'name': 'AMD Ryzen 9 7950X3D',
+        'has_3d_vcache': True
+    }
+    
+    result = optimizer.optimize_ram_settings(fake_ram, fake_cpu)
+    assert 'optimized_settings' in result
+    assert 'recommendations' in result
+    assert 'stability_score' in result
+    assert result['stability_score'] >= 0
+    assert result['stability_score'] <= 100
+    
+    print(f"✓ RAMOptimizer tests passed (stability: {result['stability_score']}%)")
+
 def run_all_tests():
     """Run all tests"""
     print("Running driver-mgt tests...\n")
@@ -122,6 +158,7 @@ def run_all_tests():
         test_driver_manager,
         test_risk_assessor,
         test_ollama_manager,
+        test_ram_optimizer,
     ]
     
     passed = 0

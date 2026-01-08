@@ -44,10 +44,12 @@ driver-mgt/
 - Provides configuration templates
 
 ### 2. Hardware Detection (`src/core/hardware_detector.py`)
+- Detects CPUs (AMD, Intel) with special detection for AMD X3D models (3D V-Cache)
 - Detects GPUs (NVIDIA, AMD, Intel)
 - Detects WiFi adapters (Intel, Realtek, MediaTek, Broadcom)
 - Detects motherboard/chipset information
-- Uses system tools (lspci, DMI)
+- Detects system RAM with detailed specs (type, speed, manufacturer)
+- Uses system tools (lspci, DMI, /proc/cpuinfo, /proc/meminfo, dmidecode)
 
 ### 3. Driver Management (`src/core/driver_manager.py`)
 - Finds available drivers for detected hardware
@@ -72,7 +74,17 @@ driver-mgt/
 - Monitoring framework
 - Falls back gracefully when Ollama is not available
 
-### 6. GUI Application (`src/gui/main_window.py`)
+### 6. RAM Optimization (`src/core/ram_optimizer.py`)
+- AI-powered RAM optimization using starcoder:3b
+- Analyzes hardware configuration to determine optimal settings
+- Hybrid approach: heuristic baseline (conservative) + AI enhancement
+- Special considerations for AMD X3D CPUs (3D V-Cache sensitivity)
+- Provides frequency, voltage, and timing recommendations
+- Calculates stability scores (0-100)
+- Generates actionable recommendations
+- Falls back to heuristic-only when AI unavailable
+
+### 7. GUI Application (`src/gui/main_window.py`)
 - PyQt6-based graphical interface
 - Driver management dashboard
 - System information tab
@@ -95,7 +107,11 @@ driver-mgt/
 ## Features Implemented
 
 ✅ **Hardware Detection**
-- Automatic detection of GPUs, WiFi adapters, motherboards
+- Automatic detection of CPUs (with AMD X3D 3D V-Cache detection)
+- GPU detection (NVIDIA, AMD, Intel)
+- WiFi adapter detection (Intel, Realtek, MediaTek, Broadcom)
+- Motherboard/chipset detection
+- System RAM detection with detailed specifications
 - Identification of current drivers
 - Device information extraction
 
@@ -116,7 +132,16 @@ driver-mgt/
 - Ollama status checking
 - Error analysis framework
 - Risk assessment support
+- RAM optimization with AI-powered analysis
 - Privacy-focused (localhost only)
+
+✅ **RAM Optimization**
+- AI-powered RAM settings optimization
+- Hybrid analysis (heuristics + AI)
+- Special handling for AMD X3D CPUs
+- Frequency, voltage, and timing recommendations
+- Stability score calculation
+- DDR4/DDR5 support
 
 ✅ **GUI Application**
 - Main window with tabs
@@ -141,10 +166,11 @@ driver-mgt/
 
 All tests pass successfully:
 - ConfigManager: ✓
-- HardwareDetector: ✓ (found 2 devices)
+- HardwareDetector: ✓ (detects CPU, GPU, WiFi, Motherboard, RAM)
 - DriverManager: ✓ (found 3 drivers)
-- RiskAssessor: ✓ (risk calculation working)
+- RiskAssessor: ✓ (15% risk calculation with AI)
 - OllamaManager: ✓ (status checking working)
+- RAMOptimizer: ✓ (80% stability score)
 
 ## Usage Examples
 

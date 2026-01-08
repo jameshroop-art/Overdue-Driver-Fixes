@@ -29,6 +29,9 @@ class HardwareDetector:
         """Detect all hardware components"""
         hardware = []
         
+        # Detect CPUs
+        hardware.extend(self._detect_cpus())
+        
         # Detect GPUs
         hardware.extend(self._detect_gpus())
         
@@ -37,6 +40,9 @@ class HardwareDetector:
         
         # Detect motherboard/chipset
         hardware.extend(self._detect_motherboard())
+        
+        # Detect RAM
+        hardware.extend(self._detect_ram())
         
         # Detect cooling devices
         hardware.extend(self._detect_cooling())
@@ -222,6 +228,150 @@ class HardwareDetector:
         except:
             pass
         return None
+    
+    def _detect_cpus(self) -> List[Dict[str, Any]]:
+        """Detect CPU hardware"""
+        cpus = []
+        
+        try:
+            # Read CPU info from /proc/cpuinfo
+            cpu_info = {}
+            with open('/proc/cpuinfo', 'r') as f:
+                for line in f:
+                    if line.strip():
+                        key, _, value = line.partition(':')
+                        key = key.strip()
+                        value = value.strip()
+                        if key == 'model name' and 'model name' not in cpu_info:
+                            cpu_info['model name'] = value
+                        elif key == 'vendor_id' and 'vendor_id' not in cpu_info:
+                            cpu_info['vendor_id'] = value
+                        elif key == 'cpu MHz' and 'cpu MHz' not in cpu_info:
+                            cpu_info['cpu MHz'] = value
+                        elif key == 'cache size' and 'cache size' not in cpu_info:
+                            cpu_info['cache size'] = value
+                        elif key == 'flags' and 'flags' not in cpu_info:
+                            cpu_info['flags'] = value
+            
+            if cpu_info:
+                model_name = cpu_info.get('model name', 'Unknown CPU')
+                vendor = 'Unknown'
+                
+                # Detect vendor
+                vendor_id = cpu_info.get('vendor_id', '').lower()
+                if 'amd' in vendor_id or 'authenticamd' in vendor_id:
+                    vendor = 'AMD'
+                elif 'intel' in vendor_id or 'genuineintel' in vendor_id:
+                    vendor = 'Intel'
+                
+                # Check for AMD X3D (3D V-Cache) models
+                has_3d_vcache = False
+                x3d_model = None
+                if vendor == 'AMD':
+                    # Check if it's an X3D model (e.g., 7800X3D, 5800X3D, 7950X3D)
+                    x3d_match = re.search(r'(\d{4}X3D)', model_name, re.IGNORECASE)
+                    if x3d_match:
+                        has_3d_vcache = True
+                        x3d_model = x3d_match.group(1)
+                
+                cpu_data = {
+                    'type': 'CPU',
+                    'name': model_name,
+                    'vendor': vendor,
+                    'driver': None,
+                    'frequency': cpu_info.get('cpu MHz', 'Unknown'),
+                    'cache_size': cpu_info.get('cache size', 'Unknown'),
+                    'has_3d_vcache': has_3d_vcache
+                }
+                
+                if x3d_model:
+                    cpu_data['x3d_model'] = x3d_model
+                
+                cpus.append(cpu_data)
+        
+        except Exception as e:
+            print(f"Error detecting CPU: {e}")
+        
+        return cpus
+    
+    def _detect_ram(self) -> List[Dict[str, Any]]:
+        """Detect RAM hardware"""
+        ram_info = []
+        
+        try:
+            # Read memory info from /proc/meminfo
+            with open('/proc/meminfo', 'r') as f:
+                meminfo = {}
+                for line in f:
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        meminfo[key.strip()] = value.strip()
+            
+            # Get total memory in GB
+            total_kb = int(meminfo.get('MemTotal', '0').split()[0])
+            total_gb = total_kb / (1024 * 1024)
+            
+            # Try to get more detailed RAM info from dmidecode if available
+            ram_details = self._get_ram_details()
+            
+            ram_data = {
+                'type': 'RAM',
+                'name': f"System Memory ({total_gb:.1f} GB)",
+                'vendor': 'Unknown',
+                'driver': None,
+                'total_gb': round(total_gb, 1),
+                'total_kb': total_kb
+            }
+            
+            # Add detailed info if available
+            if ram_details:
+                ram_data.update(ram_details)
+            
+            ram_info.append(ram_data)
+        
+        except Exception as e:
+            print(f"Error detecting RAM: {e}")
+        
+        return ram_info
+    
+    def _get_ram_details(self) -> Dict[str, Any]:
+        """Get detailed RAM information using dmidecode"""
+        details = {}
+        
+        try:
+            # Try to run dmidecode to get RAM details
+            result = subprocess.run(
+                ['dmidecode', '-t', 'memory'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout
+                
+                # Parse RAM speed
+                speed_match = re.search(r'Speed:\s*(\d+)\s*MT/s', output)
+                if speed_match:
+                    details['speed_mhz'] = int(speed_match.group(1))
+                
+                # Parse RAM type
+                type_match = re.search(r'Type:\s*(DDR\d+)', output)
+                if type_match:
+                    details['ram_type'] = type_match.group(1)
+                
+                # Parse manufacturer
+                mfr_match = re.search(r'Manufacturer:\s*(.+)', output)
+                if mfr_match:
+                    mfr = mfr_match.group(1).strip()
+                    if mfr and mfr != 'NO DIMM':
+                        details['manufacturer'] = mfr
+        
+        except Exception as e:
+            # dmidecode may not be available or require root
+            pass
+        
+        return details
     
     def _detect_cooling(self) -> List[Dict[str, Any]]:
         """Detect cooling devices"""
