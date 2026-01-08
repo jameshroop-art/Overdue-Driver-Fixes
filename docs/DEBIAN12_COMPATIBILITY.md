@@ -69,7 +69,8 @@ If you prefer manual installation:
 sudo apt-get update
 sudo apt-get install -y python3 python3-pip python3-venv python3-dev \
                         build-essential pciutils lshw dmidecode \
-                        libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0
+                        libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
+                        libxcb-cursor0 libegl1
 
 # 2. Clone repository
 git clone https://github.com/jameshroop-art/driver-mgt.git
@@ -101,10 +102,12 @@ If you encounter any issues with PyQt6 GUI:
 ```bash
 # Install Qt6 system libraries
 sudo apt-get install -y libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
-                        libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1
+                        libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libegl1
 ```
 
-These are typically installed automatically, but are listed here for troubleshooting.
+These are typically installed automatically by `install.sh`, but are listed here for troubleshooting.
+
+**Note**: From PyQt6 6.5.0+, `libxcb-cursor0` is required to load the Qt xcb platform plugin.
 
 ### Headless Systems
 
@@ -187,8 +190,16 @@ sudo apt-get install python3-venv
 
 **Solution**:
 ```bash
-sudo apt-get install libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0
+sudo apt-get install libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
+                     libxcb-cursor0 libegl1
 ```
+
+**Common error messages:**
+- "xcb-cursor0 or libxcb-cursor0 is needed to load the Qt xcb platform plugin"
+- "Could not load the Qt platform plugin 'xcb'"
+- "libEGL.so.1: cannot open shared object file"
+
+These errors indicate missing Qt dependencies. Run the command above to install them.
 
 ### Issue: Hardware detection incomplete
 
