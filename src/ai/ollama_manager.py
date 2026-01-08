@@ -162,6 +162,28 @@ class OllamaManager:
                 'error': str(e)
             }
     
+    def _is_auth_error(self, error_text: str) -> bool:
+        """Check if an error message indicates authentication is required
+        
+        Args:
+            error_text: Error message or output to check
+            
+        Returns:
+            True if error appears to be authentication-related
+        """
+        if not error_text:
+            return False
+        
+        error_lower = error_text.lower()
+        auth_keywords = ['auth', 'login', 'signin', 'sign in', 'unauthorized', 'credential']
+        return any(keyword in error_lower for keyword in auth_keywords)
+    
+    def _suggest_signin(self):
+        """Print sign-in suggestion message"""
+        print("\n⚠ This model may require authentication.")
+        print("Please sign in to Ollama with: ollama signin")
+        print("Or use the sign-in feature in the application.")
+    
     def install_model(self) -> bool:
         """Install starcoder:3b model"""
         if not self.is_available():
@@ -191,10 +213,8 @@ class OllamaManager:
                 print(f"✗ Failed to install model {self.model}")
                 
                 # Check if error is authentication-related
-                if 'auth' in error_output.lower() or 'login' in error_output.lower() or 'signin' in error_output.lower():
-                    print("\n⚠ This model may require authentication.")
-                    print("Please sign in to Ollama with: ollama signin")
-                    print("Or use the sign-in feature in the application.")
+                if self._is_auth_error(error_output):
+                    self._suggest_signin()
                 
                 return False
         except FileNotFoundError:
@@ -206,9 +226,8 @@ class OllamaManager:
             print(f"Error installing model: {error_msg}")
             
             # Check if error is authentication-related
-            if 'auth' in error_msg.lower() or 'login' in error_msg.lower():
-                print("\n⚠ This model may require authentication.")
-                print("Please sign in to Ollama with: ollama signin")
+            if self._is_auth_error(error_msg):
+                self._suggest_signin()
             
             return False
     
