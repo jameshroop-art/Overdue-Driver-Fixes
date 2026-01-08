@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""
+driver-mgt - Advanced Linux Driver & Hardware Management System
+Main entry point for the application
+"""
+
+import sys
+import os
+import argparse
+from pathlib import Path
+
+# Add src directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from core.config import ConfigManager
+from core.hardware_detector import HardwareDetector
+from core.driver_manager import DriverManager
+from utils.logger import setup_logger
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description='driver-mgt - Advanced Linux Driver & Hardware Management System'
+    )
+    
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--check-deps', action='store_true', help='Check dependencies')
+    parser.add_argument('--gui', action='store_true', default=True, help='Launch GUI (default)')
+    parser.add_argument('command', nargs='?', help='Command to execute')
+    
+    # Sub-commands
+    subparsers = parser.add_subparsers(dest='subcommand', help='Available commands')
+    
+    # Status command
+    subparsers.add_parser('status', help='Check system status')
+    
+    # Scan command
+    scan_parser = subparsers.add_parser('scan', help='Scan for hardware and drivers')
+    scan_parser.add_argument('--all', action='store_true', help='Scan all devices')
+    
+    # AI status command
+    subparsers.add_parser('ai-status', help='Check AI assistant status')
+    
+    # Monitor command
+    monitor_parser = subparsers.add_parser('monitor', help='Driver monitoring control')
+    monitor_parser.add_argument('--enable', action='store_true', help='Enable monitoring')
+    monitor_parser.add_argument('--disable', action='store_true', help='Disable monitoring')
+    monitor_parser.add_argument('--status', action='store_true', help='Check monitoring status')
+    
+    # Risk assessment command
+    risk_parser = subparsers.add_parser('risk-assess', help='Perform risk assessment')
+    risk_parser.add_argument('--device', help='Assess specific device')
+    
+    return parser.parse_args()
+
+def check_dependencies():
+    """Check if required dependencies are installed"""
+    print("Checking dependencies...")
+    
+    dependencies = {
+        'PyQt6': 'PyQt6',
+        'psutil': 'psutil',
+        'requests': 'requests',
+        'yaml': 'pyyaml'
+    }
+    
+    missing = []
+    for module, package in dependencies.items():
+        try:
+            __import__(module)
+            print(f"✓ {package}")
+        except ImportError:
+            print(f"✗ {package} (missing)")
+            missing.append(package)
+    
+    if missing:
+        print(f"\nMissing dependencies: {', '.join(missing)}")
+        print(f"Install with: pip install {' '.join(missing)}")
+        return False
+    
+    print("\n✓ All dependencies installed")
+    return True
+
+def main():
+    """Main application entry point"""
+    args = parse_arguments()
+    
+    # Setup logger
+    log_level = 'DEBUG' if args.debug else 'INFO'
+    logger = setup_logger(log_level)
+    
+    logger.info("Starting driver-mgt...")
+    
+    # Check dependencies if requested
+    if args.check_deps:
+        sys.exit(0 if check_dependencies() else 1)
+    
+    # Initialize configuration
+    config_manager = ConfigManager()
+    
+    # Handle commands
+    if args.subcommand == 'status':
+        detector = HardwareDetector(config_manager)
+        hardware = detector.detect_all()
+        print(f"Detected {len(hardware)} hardware components")
+        for hw in hardware:
+            print(f"  - {hw['type']}: {hw['name']}")
+        return
+    
+    elif args.subcommand == 'scan':
+        detector = HardwareDetector(config_manager)
+        driver_manager = DriverManager(config_manager)
+        print("Scanning for hardware and drivers...")
+        hardware = detector.detect_all()
+        for hw in hardware:
+            print(f"\n{hw['name']}:")
+            drivers = driver_manager.find_drivers(hw)
+            for driver in drivers:
+                print(f"  - {driver['name']} (source: {driver['source']})")
+        return
+    
+    elif args.subcommand == 'ai-status':
+        from ai.ollama_manager import OllamaManager
+        ollama = OllamaManager(config_manager)
+        status = ollama.get_status()
+        print(f"Ollama Status: {status['status']}")
+        print(f"Model: {status.get('model', 'N/A')}")
+        return
+    
+    elif args.subcommand == 'monitor':
+        print("Monitor command not yet implemented")
+        return
+    
+    elif args.subcommand == 'risk-assess':
+        print("Risk assessment command not yet implemented")
+        return
+    
+    # Launch GUI by default
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from gui.main_window import MainWindow
+        
+        app = QApplication(sys.argv)
+        app.setApplicationName("driver-mgt")
+        app.setOrganizationName("driver-mgt")
+        
+        window = MainWindow(config_manager)
+        window.show()
+        
+        sys.exit(app.exec())
+    except ImportError:
+        print("PyQt6 is not installed. Install it with: pip3 install PyQt6")
+        print("Or use CLI mode with commands like: driver-mgt status")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
