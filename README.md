@@ -203,10 +203,19 @@ The installer will:
 
 ### System Requirements
 - Linux kernel 5.10 or newer
-- Python 3.9+
+- Python 3.9+ (Python 3.11 on Debian 12)
 - Root/sudo access for hardware control
-- X11 or Wayland display server
+- X11 or Wayland display server (optional for CLI mode)
 - **For AI Monitoring**: 2GB RAM minimum (4GB+ recommended), CPU with AVX support
+
+### Supported Distributions
+- **Debian 12 (Bookworm)** ✅ Fully compatible (see [Debian 12 Compatibility Guide](docs/DEBIAN12_COMPATIBILITY.md))
+- Ubuntu 20.04+ and derivatives
+- Fedora 35+
+- Arch Linux and derivatives
+- Other distributions with Python 3.9+
+
+**Note**: Debian 12 uses PEP 668 (externally managed environments). driver-mgt handles this automatically via virtual environments.
 
 ### Supported Hardware
 - **GPUs**: NVIDIA RTX 20, 30, 40 series; AMD Radeon RX 5000, 6000, 7000 series

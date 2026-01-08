@@ -15,7 +15,17 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Detect package manager
+# Detect distribution and package manager
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO_ID="$ID"
+    DISTRO_VERSION="$VERSION_ID"
+    echo "Detected: $PRETTY_NAME"
+else
+    DISTRO_ID="unknown"
+    DISTRO_VERSION="unknown"
+fi
+
 if command -v apt-get &> /dev/null; then
     PKG_MANAGER="apt"
 elif command -v dnf &> /dev/null; then
@@ -34,11 +44,27 @@ echo ""
 echo "Installing Python and dependencies..."
 if [ "$PKG_MANAGER" = "apt" ]; then
     apt-get update
-    apt-get install -y python3 python3-pip python3-venv lspci pciutils
+    
+    # Debian 12 (Bookworm) specific packages
+    # PEP 668 compliance requires python3-venv for proper isolation
+    if [ "$DISTRO_ID" = "debian" ] && [ "$DISTRO_VERSION" = "12" ]; then
+        echo "Detected Debian 12 (Bookworm) - installing required packages..."
+        apt-get install -y python3 python3-pip python3-venv python3-dev \
+                           build-essential pciutils lshw dmidecode \
+                           libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0
+    else
+        # General Debian/Ubuntu packages
+        apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode
+    fi
+    
+    # Check Python version
+    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    echo "✓ Python version: $PYTHON_VERSION"
+    
 elif [ "$PKG_MANAGER" = "dnf" ]; then
-    dnf install -y python3 python3-pip pciutils
+    dnf install -y python3 python3-pip python3-devel gcc pciutils dmidecode
 elif [ "$PKG_MANAGER" = "pacman" ]; then
-    pacman -S --noconfirm python python-pip pciutils
+    pacman -S --noconfirm python python-pip base-devel pciutils dmidecode
 fi
 
 echo ""
@@ -62,12 +88,22 @@ chmod +x "$INSTALL_DIR/driver-mgt"
 echo ""
 echo "Creating virtual environment..."
 cd "$INSTALL_DIR"
-python3 -m venv venv
 
-if [ ! -f "$INSTALL_DIR/venv/bin/python" ]; then
+# Debian 12 uses PEP 668 - ensure we're creating a proper venv
+# This avoids "externally-managed-environment" errors
+if ! python3 -m venv venv; then
     echo "✗ Failed to create virtual environment"
+    echo "  This might be due to missing python3-venv package"
+    echo "  On Debian 12: sudo apt-get install python3-venv"
     exit 1
 fi
+
+if [ ! -f "$INSTALL_DIR/venv/bin/python" ]; then
+    echo "✗ Virtual environment created but Python not found"
+    exit 1
+fi
+
+echo "✓ Virtual environment created successfully"
 
 echo ""
 echo "Installing Python packages into venv..."
