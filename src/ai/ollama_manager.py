@@ -61,75 +61,122 @@ class OllamaManager:
         # For now, it's a placeholder
         return True
     
-    def signin(self) -> Dict[str, Any]:
+    def signin(self, interactive: bool = True) -> Dict[str, Any]:
         """Sign in to Ollama using Google authentication
         
         This opens a browser for OAuth authentication and stores tokens locally.
         Required for pulling certain models like starcoder that may need authentication.
         
+        Args:
+            interactive: If True, prompt user before opening browser. If False, proceed automatically.
+        
         Returns:
             Dict with 'success' boolean and 'message' or 'error' string
         """
         print("\n" + "="*60)
-        print("Ollama Sign-In")
+        print("Ollama Sign-In - Google OAuth Authentication")
         print("="*60)
-        print("\nThis will open your browser for Google authentication.")
-        print("After signing in, your credentials will be cached locally.")
-        print("\nPress Enter to continue or Ctrl+C to cancel...")
+        print("\nThis will communicate with Ollama's authentication service")
+        print("and open your browser for Google sign-in.")
+        print("The verification will be handled through this terminal.")
+        print("\nAuthentication flow:")
+        print("  1. Terminal connects to Ollama auth service")
+        print("  2. Browser opens for Google OAuth")
+        print("  3. After sign-in, verification code is sent to terminal")
+        print("  4. Credentials cached locally for future use")
         
-        try:
-            input()
-        except KeyboardInterrupt:
-            print("\n\nSign-in cancelled.")
-            return {
-                'success': False,
-                'error': 'Sign-in cancelled by user'
-            }
-        
-        print("\nOpening browser for authentication...")
-        
-        try:
-            # Run ollama signin command
-            # This will open a browser window for OAuth authentication
-            result = subprocess.run(
-                ['ollama', 'signin'],
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout for user to complete sign-in
-            )
-            
-            if result.returncode == 0:
-                print("\n✓ Successfully signed in to Ollama!")
-                print("You can now pull models that require authentication.")
-                return {
-                    'success': True,
-                    'message': 'Successfully signed in to Ollama'
-                }
-            else:
-                error_msg = result.stderr if result.stderr else result.stdout
-                print(f"\n✗ Sign-in failed: {error_msg}")
+        if interactive:
+            print("\nPress Enter to continue or Ctrl+C to cancel...")
+            try:
+                input()
+            except KeyboardInterrupt:
+                print("\n\nSign-in cancelled.")
                 return {
                     'success': False,
-                    'error': error_msg or 'Sign-in failed'
+                    'error': 'Sign-in cancelled by user'
+                }
+        
+        print("\nInitiating OAuth flow...")
+        print("Connecting to Ollama authentication service...")
+        
+        try:
+            # Run ollama signin command with real-time output
+            # This communicates directly with the auth service
+            # and opens browser, then waits for verification in terminal
+            process = subprocess.Popen(
+                ['ollama', 'signin'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            print("\n" + "-"*60)
+            
+            # Stream output in real-time to show authentication URL and progress
+            output_lines = []
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    print(line.rstrip())
+                    output_lines.append(line)
+                    
+                    # Check if browser should open
+                    if 'http' in line.lower() or 'browser' in line.lower():
+                        print("\n→ Browser window should open automatically")
+                        print("→ If not, copy the URL above and open it manually")
+                    
+                    # Check for verification/callback
+                    if 'verify' in line.lower() or 'code' in line.lower():
+                        print("\n→ Waiting for verification from browser...")
+            
+            print("-"*60 + "\n")
+            
+            # Wait for process to complete
+            return_code = process.wait(timeout=300)
+            
+            if return_code == 0:
+                print("✓ Successfully signed in to Ollama!")
+                print("✓ Credentials cached locally")
+                print("✓ You can now pull models that require authentication")
+                return {
+                    'success': True,
+                    'message': 'Successfully signed in to Ollama',
+                    'output': ''.join(output_lines)
+                }
+            else:
+                output = ''.join(output_lines)
+                print(f"\n✗ Sign-in failed")
+                if output:
+                    print(f"Details: {output}")
+                return {
+                    'success': False,
+                    'error': output or 'Sign-in failed',
+                    'return_code': return_code
                 }
                 
         except FileNotFoundError:
             error_msg = "'ollama' command not found. Please install Ollama first."
             print(f"\n✗ {error_msg}")
-            print("Visit https://ollama.ai/ for installation instructions.")
+            print("Install with: curl -fsSL https://ollama.ai/install.sh | sh")
             return {
                 'success': False,
                 'error': error_msg
             }
         except subprocess.TimeoutExpired:
-            error_msg = "Sign-in timed out. Please try again."
+            error_msg = "Sign-in timed out after 5 minutes."
             print(f"\n✗ {error_msg}")
+            print("Please try again and complete the authentication faster.")
+            if process:
+                process.kill()
             return {
                 'success': False,
                 'error': error_msg
             }
         except KeyboardInterrupt:
-            print("\n\nSign-in cancelled.")
+            print("\n\nSign-in cancelled by user.")
+            if process:
+                process.kill()
             return {
                 'success': False,
                 'error': 'Sign-in cancelled by user'

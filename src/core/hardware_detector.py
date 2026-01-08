@@ -5,9 +5,10 @@ Detects and identifies hardware components
 
 import subprocess
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 from utils.terminal import run_with_output
+import requests
 
 class HardwareDetector:
     """Detects hardware components in the system"""
@@ -198,7 +199,7 @@ class HardwareDetector:
         return info
     
     def _detect_motherboard(self) -> List[Dict[str, Any]]:
-        """Detect motherboard/chipset with BIOS information"""
+        """Detect motherboard/chipset with BIOS information and update checking"""
         boards = []
         
         try:
@@ -218,6 +219,9 @@ class HardwareDetector:
                     # Detect chipset from lspci
                     chipset_info = self._detect_chipset()
                     
+                    # Check Linux compatibility and search for repos
+                    compat_info = self._check_linux_compatibility(board_vendor, board_name)
+                    
                     board_info = {
                         'type': 'Motherboard',
                         'name': f"{board_vendor} {board_name}",
@@ -230,8 +234,14 @@ class HardwareDetector:
                         'chipset': chipset_info.get('name', 'Unknown') if chipset_info else 'Unknown',
                         'chipset_vendor': chipset_info.get('vendor', 'Unknown') if chipset_info else 'Unknown',
                         'driver': None,
-                        'linux_compatible': self._check_linux_compatibility(board_vendor, board_name)
+                        'linux_compatible': compat_info
                     }
+                    
+                    # Check for BIOS updates if we have version info
+                    if bios_version:
+                        bios_update_info = self.check_bios_updates(board_vendor, board_name, bios_version)
+                        board_info['bios_update_info'] = bios_update_info
+                    
                     boards.append(board_info)
         
         except Exception as e:
@@ -357,8 +367,8 @@ class HardwareDetector:
                     'model': model
                 }
         
-        # Unknown manufacturer
-        return {
+        # Unknown manufacturer - try to find repos
+        compat_info = {
             'status': 'unknown',
             'manufacturer': vendor,
             'linux_support': 'Unknown',
@@ -367,6 +377,135 @@ class HardwareDetector:
             'notes': f'Linux compatibility for {vendor} motherboards not verified. Check manufacturer website.',
             'model': model
         }
+        
+        # Search for repos if manufacturer not in database
+        repos = self._search_manufacturer_repos(vendor, model)
+        if repos:
+            compat_info['repos'] = repos
+            compat_info['notes'] = f'Found {len(repos)} community/manufacturer repos for Linux support.'
+        
+        return compat_info
+    
+    def _search_manufacturer_repos(self, vendor: str, model: str) -> List[Dict[str, Any]]:
+        """Search for manufacturer and community repos on GitHub
+        
+        Searches for:
+        1. Official manufacturer repos
+        2. User repos with driver/BIOS updates
+        3. Linux compatibility tools
+        
+        Returns list of repos with Linux-compatible updates
+        """
+        repos = []
+        
+        if not vendor:
+            return repos
+        
+        try:
+            # Search terms for manufacturer repos
+            search_terms = [
+                f"{vendor} linux driver",
+                f"{vendor} linux bios",
+                f"{vendor} motherboard linux",
+                f"{vendor} chipset linux"
+            ]
+            
+            for search_term in search_terms:
+                try:
+                    # Use GitHub API to search repos
+                    url = "https://api.github.com/search/repositories"
+                    params = {
+                        'q': search_term,
+                        'sort': 'stars',
+                        'order': 'desc',
+                        'per_page': 5
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        items = data.get('items', [])
+                        
+                        for item in items:
+                            # Check if repo seems relevant
+                            repo_name = item.get('name', '').lower()
+                            repo_desc = (item.get('description') or '').lower()
+                            repo_full_name = item.get('full_name', '')
+                            
+                            # Check for relevance
+                            is_relevant = (
+                                vendor.lower() in repo_name or
+                                vendor.lower() in repo_desc or
+                                'driver' in repo_name or
+                                'bios' in repo_name or
+                                'linux' in repo_name or
+                                'motherboard' in repo_name
+                            )
+                            
+                            if is_relevant and item.get('html_url'):
+                                repo_info = {
+                                    'name': item.get('name'),
+                                    'full_name': repo_full_name,
+                                    'url': item.get('html_url'),
+                                    'description': item.get('description', 'No description'),
+                                    'stars': item.get('stargazers_count', 0),
+                                    'official': vendor.lower() in repo_full_name.split('/')[0].lower()
+                                }
+                                
+                                # Avoid duplicates
+                                if not any(r['url'] == repo_info['url'] for r in repos):
+                                    repos.append(repo_info)
+                        
+                        # Limit to top 10 repos total
+                        if len(repos) >= 10:
+                            break
+                
+                except Exception as e:
+                    # Continue with other search terms on error
+                    continue
+        
+        except Exception as e:
+            print(f"Error searching repos: {e}")
+        
+        # Sort repos: official first, then by stars
+        repos.sort(key=lambda x: (not x['official'], -x['stars']))
+        return repos[:10]  # Return top 10
+    
+    def check_bios_updates(self, vendor: str, model: str, current_version: str) -> Dict[str, Any]:
+        """Check for BIOS updates from manufacturer
+        
+        Args:
+            vendor: Motherboard vendor
+            model: Motherboard model
+            current_version: Current BIOS version
+            
+        Returns:
+            Dict with update availability and download info
+        """
+        result = {
+            'update_available': False,
+            'current_version': current_version,
+            'latest_version': None,
+            'download_url': None,
+            'notes': 'Unable to check for updates automatically. Please visit manufacturer website.'
+        }
+        
+        # Get compatibility info which includes manufacturer URLs
+        compat = self._check_linux_compatibility(vendor, model)
+        
+        if compat.get('drivers_url'):
+            result['check_url'] = compat['drivers_url']
+            result['notes'] = f"Visit {compat['manufacturer']} support site to check for BIOS updates: {compat['drivers_url']}"
+        
+        # Check repos for BIOS updates
+        repos = self._search_manufacturer_repos(vendor, model)
+        if repos:
+            bios_repos = [r for r in repos if 'bios' in r['name'].lower() or 'firmware' in r['name'].lower()]
+            if bios_repos:
+                result['community_repos'] = bios_repos
+                result['notes'] += f"\n\nFound {len(bios_repos)} community repos with potential BIOS/firmware updates."
+        
+        return result
     
     def _read_dmi_file(self, path: Path) -> str:
         """Read DMI file content"""

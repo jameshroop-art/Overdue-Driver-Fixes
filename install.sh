@@ -179,7 +179,7 @@ else
 fi
 
 echo ""
-echo "Pulling starcoder:3b AI model..."
+echo "Setting up Ollama AI authentication..."
 
 # Start Ollama service if not running
 if ! systemctl is-active --quiet ollama 2>/dev/null; then
@@ -188,18 +188,52 @@ if ! systemctl is-active --quiet ollama 2>/dev/null; then
     sleep 3
 fi
 
+# Prompt for Ollama sign-in (required for starcoder:3b)
+if command -v ollama &> /dev/null; then
+    echo ""
+    echo "============================================"
+    echo "Ollama Sign-In Required"
+    echo "============================================"
+    echo "The starcoder:3b model requires authentication."
+    echo "This will open your browser for Google sign-in."
+    echo ""
+    read -p "Sign in to Ollama now? (Y/n): " -n 1 -r
+    echo ""
+    
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+        echo "Opening browser for Google authentication..."
+        echo "Please complete the sign-in process in your browser."
+        echo ""
+        
+        # Run ollama signin as the actual user (not root)
+        if su - "$ACTUAL_USER" -c "ollama signin"; then
+            echo "✓ Successfully signed in to Ollama"
+        else
+            echo "⚠ Warning: Sign-in may have failed"
+            echo "  You can sign in later with: ollama signin"
+        fi
+    else
+        echo "Skipping sign-in. You can sign in later with: ollama signin"
+    fi
+fi
+
+echo ""
+echo "Pulling starcoder:3b AI model..."
+
 # Pull starcoder:3b model
 if command -v ollama &> /dev/null; then
     echo "Pulling starcoder:3b model (this may take several minutes)..."
-    if ollama pull starcoder:3b; then
+    if su - "$ACTUAL_USER" -c "ollama pull starcoder:3b"; then
         echo "✓ starcoder:3b model installed successfully"
     else
         echo "⚠ Warning: Failed to pull starcoder:3b model"
-        echo "  You can manually pull it later with: ollama pull starcoder:3b"
+        echo "  This may be due to authentication requirement."
+        echo "  Sign in with: ollama signin"
+        echo "  Then pull manually with: ollama pull starcoder:3b"
     fi
 else
     echo "⚠ Ollama not available, skipping model pull"
-    echo "  Install Ollama and run: ollama pull starcoder:3b"
+    echo "  Install Ollama and run: ollama signin && ollama pull starcoder:3b"
 fi
 
 echo ""
