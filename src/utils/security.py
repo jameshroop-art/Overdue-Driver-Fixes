@@ -58,7 +58,7 @@ class DomainValidator:
             '~/.config/driver-mgt/reports/'
         ])
     
-    def is_url_allowed(self, url: str) -> tuple[bool, Optional[str]]:
+    def is_url_allowed(self, url: str) -> tuple[bool, str]:
         """
         Check if a URL is allowed by the whitelist
         
@@ -68,7 +68,7 @@ class DomainValidator:
         Returns:
             Tuple of (is_allowed, reason)
             - is_allowed: True if URL is whitelisted
-            - reason: Explanation if blocked
+            - reason: Explanation if blocked, or success message if allowed
         """
         if not self.enforce_whitelist:
             return (True, "Whitelist enforcement disabled")
@@ -106,7 +106,7 @@ class DomainValidator:
         except Exception as e:
             return (False, f"Error parsing URL: {e}")
     
-    def validate_github_search(self, search_query: str) -> tuple[bool, Optional[str]]:
+    def validate_github_search(self, search_query: str) -> tuple[bool, str]:
         """
         Validate GitHub search query for driver searches
         
@@ -130,7 +130,7 @@ class DomainValidator:
         
         return (True, "GitHub search is for drivers/chipsets")
     
-    def validate_huggingface_search(self, search_query: str) -> tuple[bool, Optional[str]]:
+    def validate_huggingface_search(self, search_query: str) -> tuple[bool, str]:
         """
         Validate HuggingFace search query for driver searches
         
@@ -154,7 +154,7 @@ class DomainValidator:
         
         return (True, "HuggingFace search is for drivers/chipsets")
     
-    def is_filesystem_access_allowed(self, path: str, is_critical_error: bool = False) -> tuple[bool, Optional[str]]:
+    def is_filesystem_access_allowed(self, path: str, is_critical_error: bool = False) -> tuple[bool, str]:
         """
         Check if filesystem access is allowed
         

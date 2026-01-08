@@ -25,6 +25,9 @@ class HardwareDetector:
         'Broadcom': ['Broadcom'],
     }
     
+    # HuggingFace API constants
+    HUGGINGFACE_MODEL_ID_KEY = 'modelId'
+    
     def __init__(self, config_manager):
         self.config = config_manager
         self.detected_hardware = []
@@ -385,14 +388,14 @@ class HardwareDetector:
         
         # Search for repos if manufacturer not in database
         repos = self._search_manufacturer_repos(vendor, model)
-        hf_repos = self._search_huggingface_repos(vendor, model)
+        huggingface_repos = self._search_huggingface_repos(vendor, model)
         
         # Combine both GitHub and HuggingFace results
-        all_repos = repos + hf_repos
+        all_repos = repos + huggingface_repos
         
         if all_repos:
             compat_info['repos'] = all_repos
-            compat_info['notes'] = f'Found {len(all_repos)} community/manufacturer repos for Linux support (GitHub: {len(repos)}, HuggingFace: {len(hf_repos)}).'
+            compat_info['notes'] = f'Found {len(all_repos)} community/manufacturer repos for Linux support (GitHub: {len(repos)}, HuggingFace: {len(huggingface_repos)}).'
         
         return compat_info
     
@@ -594,8 +597,8 @@ class HardwareDetector:
                     
                     for item in items:
                         if isinstance(item, dict):
-                            # Extract repo info
-                            repo_id = item.get('modelId', '')
+                            # Extract repo info using constant for key
+                            repo_id = item.get(self.HUGGINGFACE_MODEL_ID_KEY, '')
                             repo_name = repo_id.split('/')[-1] if '/' in repo_id else repo_id
                             
                             # Check for relevance (driver/firmware related)
@@ -674,10 +677,10 @@ class HardwareDetector:
         repos = self._search_manufacturer_repos(vendor, model)
         
         # Also check HuggingFace for firmware/driver repos
-        hf_repos = self._search_huggingface_repos(vendor, model)
+        huggingface_repos = self._search_huggingface_repos(vendor, model)
         
         # Combine results
-        all_repos = repos + hf_repos
+        all_repos = repos + huggingface_repos
         
         if all_repos:
             bios_repos = [r for r in all_repos if 'bios' in r['name'].lower() or 'firmware' in r['name'].lower()]
