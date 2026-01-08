@@ -9,6 +9,11 @@ import os
 import argparse
 from pathlib import Path
 
+# Set Qt platform plugin environment variable for headless/CI environments
+# This allows the application to run without X11 display server
+if 'DISPLAY' not in os.environ and 'QT_QPA_PLATFORM' not in os.environ:
+    os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
@@ -196,9 +201,27 @@ def main():
         window.show()
         
         sys.exit(app.exec())
-    except ImportError:
+    except ImportError as e:
         print("PyQt6 is not installed. Install it with: pip3 install PyQt6")
         print("Or use CLI mode with commands like: driver-mgt status")
+        if args.keep_open:
+            wait_for_user_input()
+        sys.exit(1)
+    except Exception as e:
+        error_msg = str(e)
+        if 'xcb' in error_msg.lower() or 'platform plugin' in error_msg.lower():
+            print("Qt platform plugin error detected.")
+            print("This may be due to missing system libraries or running in a headless environment.")
+            print("")
+            print("To fix:")
+            print("  1. Install required libraries: sudo apt-get install libxcb-cursor0 libxkbcommon-x11-0")
+            print("  2. Or run in CLI mode with commands like: driver-mgt status")
+            print("  3. For headless environments, set: export QT_QPA_PLATFORM=offscreen")
+            print("")
+            print(f"Error details: {error_msg}")
+        else:
+            print(f"Error launching GUI: {e}")
+            print("Try running in CLI mode with commands like: driver-mgt status")
         if args.keep_open:
             wait_for_user_input()
         sys.exit(1)

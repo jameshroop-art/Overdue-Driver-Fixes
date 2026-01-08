@@ -51,10 +51,12 @@ if [ "$PKG_MANAGER" = "apt" ]; then
         echo "Detected Debian 12 (Bookworm) - installing required packages..."
         apt-get install -y python3 python3-pip python3-venv python3-dev \
                            build-essential pciutils lshw dmidecode \
-                           libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0
+                           libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
+                           libxcb-cursor0
     else
         # General Debian/Ubuntu packages
-        apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode
+        apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode \
+                           libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libgl1-mesa-glx
     fi
     
     # Check Python version
@@ -62,9 +64,11 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     echo "✓ Python version: $PYTHON_VERSION"
     
 elif [ "$PKG_MANAGER" = "dnf" ]; then
-    dnf install -y python3 python3-pip python3-devel gcc pciutils dmidecode
+    dnf install -y python3 python3-pip python3-devel gcc pciutils dmidecode \
+                   libxcb xcb-util-cursor libxkbcommon-x11
 elif [ "$PKG_MANAGER" = "pacman" ]; then
-    pacman -S --noconfirm python python-pip base-devel pciutils dmidecode
+    pacman -S --noconfirm python python-pip base-devel pciutils dmidecode \
+                          libxcb xcb-util-cursor libxkbcommon-x11
 fi
 
 echo ""
