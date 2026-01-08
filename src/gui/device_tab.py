@@ -923,6 +923,13 @@ Estimated Recovery Time: 2-5 minutes"""
         self.chat_enable_checkbox.stateChanged.connect(self.toggle_chat)
         header_layout.addWidget(self.chat_enable_checkbox)
         
+        # Sign-in button
+        signin_btn = QPushButton("Sign In to Ollama")
+        signin_btn.setToolTip("Sign in to Ollama with Google authentication to access restricted models")
+        signin_btn.clicked.connect(self.signin_ollama)
+        header_layout.addWidget(signin_btn)
+        
+        header_layout.addStretch()
         layout.addLayout(header_layout)
         
         # Chat display
@@ -1057,3 +1064,53 @@ Estimated Recovery Time: 2-5 minutes"""
                 "<b style='color: green;'>Chat cleared.</b><br>"
                 f"<i>Context: {self.hardware.get('name', 'Device')} driver management</i><br><br>"
             )
+    
+    def signin_ollama(self):
+        """Sign in to Ollama with Google authentication"""
+        # Show information dialog
+        reply = QMessageBox.question(
+            self,
+            "Sign In to Ollama",
+            "This will open your browser for Google authentication.\n\n"
+            "Some models (like starcoder) may require you to sign in to Ollama "
+            "before you can download them.\n\n"
+            "After signing in, your credentials will be cached locally.\n\n"
+            "Continue with sign-in?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Show progress message
+            self.chat_display.append(
+                "<b style='color: blue;'>Initiating Ollama sign-in...</b><br>"
+                "<i>A browser window will open for authentication.</i><br>"
+                "<i>This dialog will update when sign-in is complete.</i><br><br>"
+            )
+            self.chat_display.repaint()
+            
+            # Perform sign-in (this will open a browser)
+            result = self.ollama_manager.signin()
+            
+            if result.get('success'):
+                QMessageBox.information(
+                    self,
+                    "Sign-In Successful",
+                    "Successfully signed in to Ollama!\n\n"
+                    "You can now pull models that require authentication."
+                )
+                self.chat_display.append(
+                    "<b style='color: green;'>✓ Successfully signed in to Ollama</b><br>"
+                    "<i>You can now install starcoder:3b model if needed.</i><br><br>"
+                )
+            else:
+                error_msg = result.get('error', 'Unknown error')
+                QMessageBox.warning(
+                    self,
+                    "Sign-In Failed",
+                    f"Failed to sign in to Ollama:\n\n{error_msg}\n\n"
+                    "You can also try signing in manually from a terminal:\n"
+                    "ollama signin"
+                )
+                self.chat_display.append(
+                    f"<b style='color: red;'>✗ Sign-in failed: {error_msg}</b><br><br>"
+                )

@@ -61,6 +61,107 @@ class OllamaManager:
         # For now, it's a placeholder
         return True
     
+    def signin(self) -> Dict[str, Any]:
+        """Sign in to Ollama using Google authentication
+        
+        This opens a browser for OAuth authentication and stores tokens locally.
+        Required for pulling certain models like starcoder that may need authentication.
+        
+        Returns:
+            Dict with 'success' boolean and 'message' or 'error' string
+        """
+        print("\n" + "="*60)
+        print("Ollama Sign-In")
+        print("="*60)
+        print("\nThis will open your browser for Google authentication.")
+        print("After signing in, your credentials will be cached locally.")
+        print("\nPress Enter to continue or Ctrl+C to cancel...")
+        
+        try:
+            input()
+        except KeyboardInterrupt:
+            print("\n\nSign-in cancelled.")
+            return {
+                'success': False,
+                'error': 'Sign-in cancelled by user'
+            }
+        
+        print("\nOpening browser for authentication...")
+        
+        try:
+            # Run ollama signin command
+            # This will open a browser window for OAuth authentication
+            result = subprocess.run(
+                ['ollama', 'signin'],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout for user to complete sign-in
+            )
+            
+            if result.returncode == 0:
+                print("\n✓ Successfully signed in to Ollama!")
+                print("You can now pull models that require authentication.")
+                return {
+                    'success': True,
+                    'message': 'Successfully signed in to Ollama'
+                }
+            else:
+                error_msg = result.stderr if result.stderr else result.stdout
+                print(f"\n✗ Sign-in failed: {error_msg}")
+                return {
+                    'success': False,
+                    'error': error_msg or 'Sign-in failed'
+                }
+                
+        except FileNotFoundError:
+            error_msg = "'ollama' command not found. Please install Ollama first."
+            print(f"\n✗ {error_msg}")
+            print("Visit https://ollama.ai/ for installation instructions.")
+            return {
+                'success': False,
+                'error': error_msg
+            }
+        except subprocess.TimeoutExpired:
+            error_msg = "Sign-in timed out. Please try again."
+            print(f"\n✗ {error_msg}")
+            return {
+                'success': False,
+                'error': error_msg
+            }
+        except KeyboardInterrupt:
+            print("\n\nSign-in cancelled.")
+            return {
+                'success': False,
+                'error': 'Sign-in cancelled by user'
+            }
+        except Exception as e:
+            error_msg = f"Error during sign-in: {e}"
+            print(f"\n✗ {error_msg}")
+            return {
+                'success': False,
+                'error': error_msg
+            }
+    
+    def check_signin_status(self) -> Dict[str, Any]:
+        """Check if user is signed in to Ollama
+        
+        Returns:
+            Dict with 'signed_in' boolean and optional 'username' or 'error'
+        """
+        try:
+            # Try to check signin status - ollama doesn't have a direct command for this
+            # but we can infer from certain API calls or command responses
+            # For now, we'll just indicate that signin is an available option
+            return {
+                'signed_in': None,  # Unknown status
+                'message': 'Use signin() method to authenticate with Ollama'
+            }
+        except Exception as e:
+            return {
+                'signed_in': False,
+                'error': str(e)
+            }
+    
     def install_model(self) -> bool:
         """Install starcoder:3b model"""
         if not self.is_available():
@@ -70,6 +171,9 @@ class OllamaManager:
         
         print(f"Installing {self.model} model...")
         print(f"This may take several minutes depending on your internet connection...")
+        print(f"\nNote: If the model requires authentication, you may need to sign in first.")
+        print(f"If you see authentication errors, run: ollama signin")
+        
         try:
             # Use ollama pull command
             # Show output in terminal for user visibility
@@ -83,14 +187,29 @@ class OllamaManager:
                 print(f"✓ Model {self.model} installed successfully")
                 return True
             else:
+                error_output = result.stderr if hasattr(result, 'stderr') else ''
                 print(f"✗ Failed to install model {self.model}")
+                
+                # Check if error is authentication-related
+                if 'auth' in error_output.lower() or 'login' in error_output.lower() or 'signin' in error_output.lower():
+                    print("\n⚠ This model may require authentication.")
+                    print("Please sign in to Ollama with: ollama signin")
+                    print("Or use the sign-in feature in the application.")
+                
                 return False
         except FileNotFoundError:
             print(f"Error: 'ollama' command not found. Please install Ollama first.")
             print(f"Visit https://ollama.ai/ for installation instructions.")
             return False
         except Exception as e:
-            print(f"Error installing model: {e}")
+            error_msg = str(e)
+            print(f"Error installing model: {error_msg}")
+            
+            # Check if error is authentication-related
+            if 'auth' in error_msg.lower() or 'login' in error_msg.lower():
+                print("\n⚠ This model may require authentication.")
+                print("Please sign in to Ollama with: ollama signin")
+            
             return False
     
     def analyze_error(self, error_log: str) -> Dict[str, Any]:
