@@ -52,20 +52,28 @@ def run_with_output(
         check: If True, raise CalledProcessError on non-zero exit
         
     Returns:
-        CompletedProcess object with stdout/stderr
+        CompletedProcess object with stdout/stderr (always captured)
     """
     if show_output:
-        # Run with output visible in terminal
+        # Run with output visible in terminal AND capture for return
         print(f"\n{'='*60}")
         print(f"Running: {' '.join(command)}")
         print(f"{'='*60}\n")
         
+        # Run and capture output
         result = subprocess.run(
             command,
+            capture_output=True,
             timeout=timeout,
             check=check,
             text=True
         )
+        
+        # Display captured output
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
         
         print(f"\n{'='*60}")
         print(f"Command completed with exit code: {result.returncode}")
@@ -73,7 +81,7 @@ def run_with_output(
         
         return result
     else:
-        # Capture output for programmatic use
+        # Capture output for programmatic use only
         return subprocess.run(
             command,
             capture_output=True,

@@ -26,10 +26,14 @@ def parse_arguments():
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--check-deps', action='store_true', help='Check dependencies')
     parser.add_argument('--gui', action='store_true', default=True, help='Launch GUI (default)')
-    parser.add_argument('--keep-open', action='store_true', default=True, 
-                       help='Keep terminal open after command completion (default: True)')
-    parser.add_argument('--show-output', action='store_true', default=True,
-                       help='Show subprocess output in terminal (default: True)')
+    parser.add_argument('--keep-open', dest='keep_open', action='store_true', default=True, 
+                       help='Keep terminal open after command completion (default)')
+    parser.add_argument('--no-keep-open', dest='keep_open', action='store_false',
+                       help='Close terminal immediately after command completion')
+    parser.add_argument('--show-output', dest='show_output', action='store_true', default=True,
+                       help='Show subprocess output in terminal (default)')
+    parser.add_argument('--no-show-output', dest='show_output', action='store_false',
+                       help='Hide subprocess output (quiet mode)')
     parser.add_argument('command', nargs='?', help='Command to execute')
     
     # Sub-commands
