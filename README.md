@@ -1,8 +1,8 @@
-# GhostOS - Advanced Linux Driver & Hardware Management System
+# driver-mgt - Advanced Linux Driver & Hardware Management System
 
 **Overdue Driver Adjustment Project**
 
-GhostOS is a comprehensive driver and hardware management system designed to bridge the gap between Windows-level hardware control and Linux environments. Specifically built to fully utilize NVIDIA RTX graphics cards, ASUS motherboard chipsets, WiFi drivers, and advanced cooling systems on Linux.
+driver-mgt is a comprehensive driver and hardware management system designed to bridge the gap between Windows-level hardware control and Linux environments. Specifically built to fully utilize NVIDIA RTX graphics cards, ASUS motherboard chipsets, WiFi drivers, and advanced cooling systems on Linux.
 
 ## 🎯 Project Goals
 
@@ -70,14 +70,14 @@ GhostOS is a comprehensive driver and hardware management system designed to bri
 
 ```bash
 # Clone the repository
-git clone https://github.com/jameshroop-art/GhostOS.git
-cd GhostOS
+git clone https://github.com/jameshroop-art/driver-mgt.git
+cd driver-mgt
 
 # Run the installer
 sudo bash install.sh
 
-# Launch GhostOS
-ghostos
+# Launch driver-mgt
+driver-mgt
 ```
 
 The installer will:
@@ -152,9 +152,9 @@ The installer will:
 
 ## 🛠️ Configuration
 
-GhostOS stores configuration in:
+driver-mgt stores configuration in:
 ```
-~/.config/ghostos/
+~/.config/driver-mgt/
 ├── config.json          # Main configuration
 ├── profiles/            # Cooling profiles
 ├── curves/              # Fan/pump curves
@@ -163,7 +163,7 @@ GhostOS stores configuration in:
 
 ### Creating Custom Cooling Profiles
 
-1. Open GhostOS
+1. Open driver-mgt
 2. Navigate to "Cooling Control" tab
 3. Click "Create Profile"
 4. Set 10 temperature points with corresponding fan/pump speeds
@@ -188,27 +188,27 @@ Temperature (°C) | Fan Speed (%)
 
 ### Running as System Service
 
-GhostOS can run as a background service for automatic hardware management:
+driver-mgt can run as a background service for automatic hardware management:
 
 ```bash
-sudo systemctl enable ghostos
-sudo systemctl start ghostos
+sudo systemctl enable driver-mgt
+sudo systemctl start driver-mgt
 ```
 
 ### Command Line Interface
 
 ```bash
 # Check system status
-ghostos status
+driver-mgt status
 
 # Apply cooling profile
-ghostos cooling --profile silent
+driver-mgt cooling --profile silent
 
 # Update drivers
-ghostos driver --update nvidia
+driver-mgt driver --update nvidia
 
 # Monitor temperatures
-ghostos monitor --temp
+driver-mgt monitor --temp
 ```
 
 ## 🐛 Troubleshooting
@@ -218,8 +218,8 @@ ghostos monitor --temp
 # Check driver status
 nvidia-smi
 
-# Reload GhostOS NVIDIA module
-sudo ghostos driver --reload nvidia
+# Reload driver-mgt NVIDIA module
+sudo driver-mgt driver --reload nvidia
 ```
 
 ### Cooling Control Not Working
@@ -237,13 +237,13 @@ sudo usermod -a -G i2c $USER
 ### GUI Won't Launch
 ```bash
 # Check dependencies
-ghostos --check-deps
+driver-mgt --check-deps
 
 # Run in debug mode
-ghostos --debug
+driver-mgt --debug
 
 # Check logs
-cat ~/.config/ghostos/logs/ghostos.log
+cat ~/.config/driver-mgt/logs/driver-mgt.log
 ```
 
 ## 🤝 Contributing
@@ -263,7 +263,7 @@ This project is licensed under the GPL-3.0 License - see LICENSE file for detail
 
 ## ⚖️ Legal & Ethics
 
-GhostOS uses only:
+driver-mgt uses only:
 - Publicly available drivers released by manufacturers
 - Open-source kernel modules
 - Official APIs and interfaces
@@ -282,9 +282,9 @@ All driver management is performed on officially released Linux drivers.
 
 ## 📞 Support
 
-- **Issues**: https://github.com/jameshroop-art/GhostOS/issues
-- **Discussions**: https://github.com/jameshroop-art/GhostOS/discussions
-- **Wiki**: https://github.com/jameshroop-art/GhostOS/wiki
+- **Issues**: https://github.com/jameshroop-art/driver-mgt/issues
+- **Discussions**: https://github.com/jameshroop-art/driver-mgt/discussions
+- **Wiki**: https://github.com/jameshroop-art/driver-mgt/wiki
 
 ---
 
