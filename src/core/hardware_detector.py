@@ -7,6 +7,7 @@ import subprocess
 import re
 from typing import List, Dict, Any
 from pathlib import Path
+from utils.terminal import run_with_output
 
 class HardwareDetector:
     """Detects hardware components in the system"""
@@ -56,10 +57,12 @@ class HardwareDetector:
         
         try:
             # Use lspci to detect GPUs
-            result = subprocess.run(
+            # Note: capture_output=True to parse results programmatically
+            # Use verbose mode for CLI to show output
+            show_output = self.config.get('cli.show_subprocess_output', False)
+            result = run_with_output(
                 ['lspci', '-v'],
-                capture_output=True,
-                text=True,
+                show_output=show_output,
                 timeout=5
             )
             
@@ -134,10 +137,10 @@ class HardwareDetector:
         wifi_adapters = []
         
         try:
-            result = subprocess.run(
+            show_output = self.config.get('cli.show_subprocess_output', False)
+            result = run_with_output(
                 ['lspci', '-v'],
-                capture_output=True,
-                text=True,
+                show_output=show_output,
                 timeout=5
             )
             
@@ -340,10 +343,10 @@ class HardwareDetector:
         
         try:
             # Try to run dmidecode to get RAM details
-            result = subprocess.run(
+            show_output = self.config.get('cli.show_subprocess_output', False)
+            result = run_with_output(
                 ['dmidecode', '-t', 'memory'],
-                capture_output=True,
-                text=True,
+                show_output=show_output,
                 timeout=5
             )
             

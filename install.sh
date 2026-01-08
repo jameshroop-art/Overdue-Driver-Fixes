@@ -75,7 +75,7 @@ Name=driver-mgt
 Comment=Advanced Linux Driver Management
 Exec=/usr/local/bin/driver-mgt
 Icon=preferences-system
-Terminal=false
+Terminal=true
 Categories=System;Settings;
 EOF
 
