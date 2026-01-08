@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "general": {
+    "auto_update_check": true,
+    "notification_enabled": true,
+    "log_level": "INFO"
+  },
+  "hardware": {
+    "scan_interval": 300,
+    "auto_detect": true
+  },
+  "drivers": {
+    "auto_install": false,
+    "preferred_sources": ["official", "distribution", "community"],
+    "backup_on_install": true,
+    "test_after_install": true
+  },
+  "cooling": {
+    "enabled": false,
+    "auto_mode": true,
+    "default_profile": "balanced"
+  },
+  "gui": {
+    "theme": "dark",
+    "start_minimized": false,
+    "show_tray_icon": true
+  },
+  "paths": {
+    "config_dir": "~/.config/driver-mgt",
+    "profiles_dir": "~/.config/driver-mgt/profiles",
+    "logs_dir": "~/.config/driver-mgt/logs",
+    "corrections_dir": "~/.config/driver-mgt/corrections",
+    "reports_dir": "~/.config/driver-mgt/reports"
+  }
+}

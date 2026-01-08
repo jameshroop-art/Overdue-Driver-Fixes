@@ -1,0 +1,31 @@
+{
+  "monitoring": {
+    "enabled": false,
+    "model": "starcoder:3b",
+    "sensitivity": "medium",
+    "performance_impact": "low"
+  },
+  "risk_assessment": {
+    "enabled": true,
+    "check_on_scan": true,
+    "error_database_update": "daily",
+    "show_percentage": true,
+    "ai_remediation_check": true
+  },
+  "ollama": {
+    "host": "localhost",
+    "port": 11434,
+    "auto_install": true,
+    "auto_shutdown": true
+  },
+  "privacy": {
+    "localhost_only": true,
+    "no_external_transmission": true,
+    "user_consent_required": true
+  },
+  "logging": {
+    "corrections_path": "~/.config/driver-mgt/corrections/",
+    "log_format": "plain_text",
+    "retention_days": 30
+  }
+}
