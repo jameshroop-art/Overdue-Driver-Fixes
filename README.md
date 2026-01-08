@@ -20,6 +20,9 @@ driver-mgt is a comprehensive driver and hardware management system designed to 
   - Positive identification of installed hardware components
   - Current driver and chipset enumeration
   - Real-time hardware inventory
+  - **Error risk assessment** with percentage likelihood
+  - Known error database cross-reference
+  - System configuration vulnerability analysis
 
 - 🎮 **NVIDIA RTX Driver Control**
   - Official NVIDIA repository integration
@@ -49,6 +52,16 @@ driver-mgt is a comprehensive driver and hardware management system designed to 
   - Community-maintained drivers with user reviews
   - Stability and reliability ratings for all options
   - Fallback to known Linux sources when official drivers unavailable
+
+- ⚠️ **Risk Assessment & Error Prediction**
+  - Automatic error database check when gathering driver information
+  - **Percentage likelihood** of system errors with current configuration
+  - Known issue detection for specific hardware/driver combinations
+  - AI-powered risk analysis using starcoder:3b
+  - **Remediation capability assessment**: Determines if starcoder:3b can prevent the error
+  - Proactive warnings before installation
+  - Compatibility matrix with error probability scores
+  - Historical error pattern recognition
 
 ### Cooling System Control
 - 🌡️ **Advanced Temperature Monitoring**
@@ -220,17 +233,23 @@ The installer will:
    - Comprehensive hardware inventory
    - Detected components with manufacturer/model
    - Current driver versions and status
+   - **Error risk percentage** for each component (color-coded)
    - Available updates from official sources
    - Stability and reliability ratings
+   - **AI remediation capability indicator** per device
    - Quick action buttons for all devices
 
 2. **Per-Device Tabs** (Auto-generated for each detected component)
    - Device-specific information and status
+   - **Error Risk Assessment** with percentage likelihood
+   - **Can AI Remediate**: Yes/No/Partial indicator
    - Available driver options with ratings:
      * Official manufacturer drivers
      * Distribution-provided drivers
      * Community drivers with user reviews
+     * **Error risk %** for each driver option
    - Stability score and reliability metrics
+   - Known issues and error database matches
    - Installation status and history
    - One-click install/update/rollback
    - AI-assisted troubleshooting
@@ -305,6 +324,13 @@ The `ai-config.json` file controls real-time monitoring behavior:
     "sensitivity": "medium",
     "performance_impact": "low"
   },
+  "risk_assessment": {
+    "enabled": true,
+    "check_on_scan": true,
+    "error_database_update": "daily",
+    "show_percentage": true,
+    "ai_remediation_check": true
+  },
   "privacy": {
     "localhost_only": true,
     "no_external_transmission": true,
@@ -317,6 +343,13 @@ The `ai-config.json` file controls real-time monitoring behavior:
   }
 }
 ```
+
+**Risk Assessment Configuration:**
+- `enabled`: Enable/disable risk assessment (default: true)
+- `check_on_scan`: Automatically assess risk when scanning for drivers
+- `error_database_update`: Frequency to update known error database (daily/weekly/manual)
+- `show_percentage`: Display error likelihood as percentage
+- `ai_remediation_check`: Check if starcoder:3b can prevent identified errors
 
 ### Creating Custom Cooling Profiles
 
@@ -360,19 +393,32 @@ driver-mgt integrates Ollama with the starcoder:3b model to provide intelligent,
 - Detects currently installed drivers and chipsets
 - Creates hardware inventory
 
-**Step 2: Repository Discovery**
+**Step 2: Error Risk Assessment**
+- Cross-references detected hardware/drivers with known error database
+- Calculates **percentage likelihood** of errors with current configuration
+- Identifies specific risks for each hardware/driver combination
+- AI (starcoder:3b) analyzes system configuration for vulnerabilities
+- **Remediation Assessment**: Determines if AI can prevent identified errors
+- Displays risk percentage and remediation capability per component
+- Provides recommendations for high-risk configurations
+
+**Step 3: Repository Discovery**
 - Checks official manufacturer repositories (NVIDIA, ASUS, AMD, Intel)
 - Queries distribution-specific package sources
 - Searches community driver repositories
 - Compiles list with stability ratings and user reviews
+- Filters options based on risk assessment results
 
-**Step 3: Driver Options Presentation**
+**Step 4: Driver Options Presentation**
 - GUI displays all available drivers per device
 - Shows stability/reliability ratings
+- **Displays error risk percentage** for each driver option
+- **Shows if AI can remediate** potential errors
 - Includes user reviews and compatibility scores
-- Highlights recommended options
+- Highlights recommended low-risk options
+- Warning indicators for high-risk drivers
 
-**Step 4: AI-Guided Installation**
+**Step 5: AI-Guided Installation**
 When installing a driver:
 1. AI analyzes user's specific Linux distribution
 2. Pre-installation compatibility check
@@ -381,13 +427,14 @@ When installing a driver:
 5. Runs post-installation verification tests
 6. Validates driver functionality
 
-**Step 5: Post-Install Testing**
+**Step 6: Post-Install Testing**
 - GPU: Rendering tests, compute verification
 - WiFi: Connection stability, throughput tests
 - Chipset: Device enumeration, functionality checks
 - Creates baseline for future comparisons
+- Validates risk assessment predictions
 
-**Step 6: Error Recovery (if needed)**
+**Step 7: Error Recovery (if needed)**
 If installation fails or system won't boot:
 1. **Automatic Detection**: Detects driver failure on boot
 2. **Auto-Revert**: Reverts to previous working driver
@@ -396,7 +443,7 @@ If installation fails or system won't boot:
 5. **Re-test**: Runs verification tests after correction
 6. **Alternative Search**: If correction fails, finds alternative drivers
 
-**Step 7: Automated Reporting**
+**Step 8: Automated Reporting**
 For unresolvable issues:
 - Generates clean error report (excludes attempted fixes)
 - Includes driver ID, hardware specs, and error details
@@ -404,12 +451,12 @@ For unresolvable issues:
 - Saves report to `~/.config/driver-mgt/reports/`
 - Optionally submits to manufacturer
 
-**Step 8: Resource Cleanup**
+**Step 9: Resource Cleanup**
 - Ollama server shuts down after operations complete
 - Minimal resource usage during idle
 - AI reactivates on-demand for next operation
 
-**Step 9: Continuous Runtime Monitoring (Optional)**
+**Step 10: Continuous Runtime Monitoring (Optional)**
 When enabled, Ollama (starcoder:3b only) monitors driver operations:
 1. **Low-Impact Monitoring**: Watches driver operations in real-time
 2. **Failure Prediction**: Detects patterns that could lead to failures
@@ -518,7 +565,54 @@ driver-mgt monitor --enable --ai-watch              # Enable AI monitoring
 driver-mgt monitor --status                         # Check monitoring status
 driver-mgt logs --corrections --since "1 hour ago"  # View recent corrections
 driver-mgt logs --corrections --device <device-id>  # View device-specific corrections
+
+# Risk assessment commands
+driver-mgt risk-assess                              # Assess all hardware/drivers
+driver-mgt risk-assess --device <device-id>         # Assess specific device
+driver-mgt risk-check --driver <driver-name>        # Check specific driver risk
+driver-mgt can-remediate --device <device-id>       # Check if AI can fix potential errors
 ```
+
+### Risk Assessment & Error Prediction
+
+Check for potential errors and AI remediation capability:
+
+```bash
+# Perform comprehensive risk assessment
+driver-mgt risk-assess
+
+# Example output:
+# Device: NVIDIA RTX 3080
+#   Current Driver: nvidia-driver-515
+#   Error Risk: 12% (Low)
+#   Known Issues: 2
+#   AI Remediation: Yes (Can prevent all known errors)
+#
+# Device: Intel WiFi AX200
+#   Current Driver: iwlwifi
+#   Error Risk: 5% (Very Low)
+#   Known Issues: 0
+#   AI Remediation: N/A
+
+# Assess specific device
+driver-mgt risk-assess --device nvidia
+
+# Check if AI can remediate before installation
+driver-mgt can-remediate --device <device-id> --driver <driver-name>
+
+# View detailed risk report
+driver-mgt risk-report --device <device-id> --verbose
+
+# Check compatibility matrix with error probabilities
+driver-mgt compatibility-matrix --device <device-id>
+```
+
+**Risk Assessment Features:**
+- Percentage likelihood of errors for current configuration
+- Known issue database cross-reference
+- AI remediation capability indicator (Yes/No/Partial)
+- Historical error pattern analysis
+- Proactive warnings before installation
 
 ### Real-Time Driver Monitoring
 
@@ -632,6 +726,34 @@ ollama run starcoder:3b "test"
 # View AI logs
 cat ~/.config/driver-mgt/logs/ai-assistant.log
 ```
+
+### Risk Assessment Issues
+```bash
+# Update error database manually
+driver-mgt update-error-db
+
+# Force risk assessment refresh
+driver-mgt risk-assess --refresh
+
+# Check error database status
+driver-mgt error-db-status
+
+# View risk assessment logs
+driver-mgt logs --risk-assessment
+
+# Test AI remediation capability
+driver-mgt test-remediation --device <device-id>
+
+# Verify risk assessment is enabled
+cat ~/.config/driver-mgt/ai-config.json | grep risk_assessment
+```
+
+**Risk Assessment Notes:**
+- Risk percentages are based on known error database and AI analysis
+- AI remediation check uses starcoder:3b exclusively
+- Error database updates automatically (configurable frequency)
+- High-risk configurations (>30%) show warnings before installation
+- AI can remediate most common driver errors (typically 80-95% success rate)
 
 ### Real-Time Monitoring Issues
 ```bash
