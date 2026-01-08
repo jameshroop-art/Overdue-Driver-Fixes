@@ -60,8 +60,18 @@ echo ""
 echo "Installing driver-mgt..."
 INSTALL_DIR="/opt/driver-mgt"
 mkdir -p "$INSTALL_DIR"
-cp -r src config driver-mgt "$INSTALL_DIR/"
+cp -r src config driver-mgt requirements.txt "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/driver-mgt"
+
+echo ""
+echo "Creating virtual environment..."
+cd "$INSTALL_DIR"
+python3 -m venv venv
+
+echo ""
+echo "Installing Python packages into venv..."
+"$INSTALL_DIR/venv/bin/pip" install --upgrade pip
+"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
 
 # Create symlink
 ln -sf "$INSTALL_DIR/driver-mgt" /usr/local/bin/driver-mgt
@@ -75,12 +85,15 @@ Name=driver-mgt
 Comment=Advanced Linux Driver Management
 Exec=/usr/local/bin/driver-mgt
 Icon=preferences-system
-Terminal=false
+Terminal=true
 Categories=System;Settings;
 EOF
 
 echo ""
 echo "Installation complete!"
+echo ""
+echo "A virtual environment has been created at $INSTALL_DIR/venv"
+echo "The application will automatically use this venv when started."
 echo ""
 echo "You can now run driver-mgt with:"
 echo "  driver-mgt         (GUI mode)"

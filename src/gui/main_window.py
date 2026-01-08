@@ -5,7 +5,7 @@ Main Window for driver-mgt GUI
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QMessageBox, QStatusBar
+    QTableWidgetItem, QMessageBox, QStatusBar, QProgressBar
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
@@ -13,6 +13,7 @@ from PyQt6.QtGui import QIcon
 from core.hardware_detector import HardwareDetector
 from core.driver_manager import DriverManager
 from ai.ollama_manager import OllamaManager
+from gui.device_tab import DeviceTab
 
 class MainWindow(QMainWindow):
     """Main application window"""
@@ -25,6 +26,10 @@ class MainWindow(QMainWindow):
         self.hardware_detector = HardwareDetector(config_manager)
         self.driver_manager = DriverManager(config_manager)
         self.ollama_manager = OllamaManager(config_manager)
+        
+        # Store detected hardware and device tabs
+        self.detected_hardware = []
+        self.device_tabs = {}
         
         # Setup UI
         self.init_ui()
@@ -153,12 +158,45 @@ class MainWindow(QMainWindow):
         self.statusBar.showMessage("Scanning hardware...")
         
         try:
-            hardware = self.hardware_detector.detect_all()
-            self.update_hardware_table(hardware)
-            self.statusBar.showMessage(f"Found {len(hardware)} hardware components")
+            self.detected_hardware = self.hardware_detector.detect_all()
+            self.update_hardware_table(self.detected_hardware)
+            
+            # Create device-specific tabs
+            self.create_device_tabs()
+            
+            self.statusBar.showMessage(f"Found {len(self.detected_hardware)} hardware components")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error scanning hardware: {e}")
             self.statusBar.showMessage("Scan failed")
+    
+    def create_device_tabs(self):
+        """Create tabs for each detected device"""
+        # Remove old device tabs (keep Dashboard and System Info)
+        for device_id, tab_index in list(self.device_tabs.items()):
+            self.tabs.removeTab(tab_index)
+        
+        self.device_tabs.clear()
+        
+        # Create new device tabs
+        for hardware in self.detected_hardware:
+            device_name = hardware.get('name', 'Unknown Device')
+            device_type = hardware.get('type', 'Device')
+            
+            # Create device tab
+            device_tab = DeviceTab(
+                hardware,
+                self.driver_manager,
+                self.ollama_manager,
+                self.config
+            )
+            
+            # Add tab with icon based on type
+            tab_label = f"{device_type}: {device_name[:30]}"
+            tab_index = self.tabs.addTab(device_tab, tab_label)
+            
+            # Store tab reference
+            device_id = hardware.get('id', device_name)
+            self.device_tabs[device_id] = tab_index
     
     def update_hardware_table(self, hardware):
         """Update hardware table with detected hardware"""
@@ -172,6 +210,9 @@ class MainWindow(QMainWindow):
             
             status = "Active" if hw.get('driver') else "No Driver"
             self.hardware_table.setItem(i, 4, QTableWidgetItem(status))
+        
+        # Add double-click handler to open device tab
+        self.hardware_table.cellDoubleClicked.connect(self.open_device_tab)
     
     def update_system_info(self):
         """Update system information table"""
@@ -214,7 +255,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please select a hardware component")
             return
         
-        QMessageBox.information(self, "Info", "Driver update not yet implemented")
+        # Open the device tab for selected hardware
+        self.open_device_tab(current_row, 0)
+    
+    def open_device_tab(self, row, column):
+        """Open device-specific tab"""
+        if row < len(self.detected_hardware):
+            hardware = self.detected_hardware[row]
+            device_id = hardware.get('id', hardware.get('name', 'Unknown'))
+            
+            # Switch to device tab if it exists
+            if device_id in self.device_tabs:
+                self.tabs.setCurrentIndex(self.device_tabs[device_id])
     
     def rollback_driver(self):
         """Rollback selected driver"""
@@ -223,7 +275,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please select a hardware component")
             return
         
-        QMessageBox.information(self, "Info", "Driver rollback not yet implemented")
+        # Open the device tab for selected hardware
+        self.open_device_tab(current_row, 0)
     
     def test_driver(self):
         """Test selected driver"""
@@ -232,7 +285,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please select a hardware component")
             return
         
-        QMessageBox.information(self, "Info", "Driver testing not yet implemented")
+        # Open the device tab for selected hardware
+        self.open_device_tab(current_row, 0)
     
     def apply_theme(self):
         """Apply dark theme"""
@@ -289,5 +343,46 @@ class MainWindow(QMainWindow):
                 QStatusBar {
                     background-color: #3b3b3b;
                     color: #ffffff;
+                }
+                QGroupBox {
+                    border: 1px solid #444444;
+                    border-radius: 5px;
+                    margin-top: 10px;
+                    padding-top: 10px;
+                    font-weight: bold;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px 0 5px;
+                }
+                QTextEdit {
+                    background-color: #3b3b3b;
+                    color: #ffffff;
+                    border: 1px solid #444444;
+                }
+                QComboBox {
+                    background-color: #3b3b3b;
+                    color: #ffffff;
+                    border: 1px solid #444444;
+                    padding: 5px;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 5px solid #ffffff;
+                }
+                QProgressBar {
+                    border: 1px solid #444444;
+                    border-radius: 3px;
+                    text-align: center;
+                    background-color: #3b3b3b;
+                }
+                QProgressBar::chunk {
+                    background-color: #4b8b4b;
                 }
             """)

@@ -6,6 +6,7 @@ Handles Ollama integration and starcoder:3b model
 import subprocess
 import requests
 from typing import Dict, Any
+from utils.terminal import run_with_output
 
 class OllamaManager:
     """Manages Ollama AI integration"""
@@ -69,10 +70,11 @@ class OllamaManager:
         print(f"Installing {self.model} model...")
         try:
             # Use ollama pull command
-            result = subprocess.run(
+            # Show output in terminal for user visibility
+            show_output = self.config.get('cli.show_subprocess_output', True)
+            result = run_with_output(
                 ['ollama', 'pull', self.model],
-                capture_output=True,
-                text=True,
+                show_output=show_output,
                 timeout=300
             )
             return result.returncode == 0

@@ -12,6 +12,18 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
+# Ensure we're running in a virtual environment
+# This must be done before importing other modules
+try:
+    from utils.venv_manager import ensure_venv
+    
+    # Check if --no-venv flag is present (for debugging/development)
+    if '--no-venv' not in sys.argv:
+        ensure_venv()
+except Exception as e:
+    print(f"Warning: Failed to set up virtual environment: {e}")
+    print("Continuing with system Python...")
+
 from core.config import ConfigManager
 from core.hardware_detector import HardwareDetector
 from core.driver_manager import DriverManager
@@ -26,6 +38,16 @@ def parse_arguments():
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--check-deps', action='store_true', help='Check dependencies')
     parser.add_argument('--gui', action='store_true', default=True, help='Launch GUI (default)')
+    parser.add_argument('--keep-open', dest='keep_open', action='store_true', default=True, 
+                       help='Keep terminal open after command completion (default)')
+    parser.add_argument('--no-keep-open', dest='keep_open', action='store_false',
+                       help='Close terminal immediately after command completion')
+    parser.add_argument('--show-output', dest='show_output', action='store_true', default=True,
+                       help='Show subprocess output in terminal (default)')
+    parser.add_argument('--no-show-output', dest='show_output', action='store_false',
+                       help='Hide subprocess output (quiet mode)')
+    parser.add_argument('--no-venv', action='store_true',
+                       help='Skip virtual environment setup (for development)')
     parser.add_argument('command', nargs='?', help='Command to execute')
     
     # Sub-commands
@@ -81,6 +103,14 @@ def check_dependencies():
     print("\n✓ All dependencies installed")
     return True
 
+def wait_for_user_input(message="Press Enter to close..."):
+    """Wait for user input before closing terminal"""
+    try:
+        input(f"\n{message}")
+    except (EOFError, KeyboardInterrupt):
+        print("\n")
+        pass
+
 def main():
     """Main application entry point"""
     args = parse_arguments()
@@ -93,18 +123,27 @@ def main():
     
     # Check dependencies if requested
     if args.check_deps:
-        sys.exit(0 if check_dependencies() else 1)
+        result = check_dependencies()
+        if args.keep_open:
+            wait_for_user_input()
+        sys.exit(0 if result else 1)
     
     # Initialize configuration
     config_manager = ConfigManager()
     
+    # Set CLI configuration for subprocess output visibility
+    config_manager.set('cli.show_subprocess_output', args.show_output)
+    
     # Handle commands
     if args.subcommand == 'status':
+        print("Checking system status...")
         detector = HardwareDetector(config_manager)
         hardware = detector.detect_all()
-        print(f"Detected {len(hardware)} hardware components")
+        print(f"\nDetected {len(hardware)} hardware components:")
         for hw in hardware:
             print(f"  - {hw['type']}: {hw['name']}")
+        if args.keep_open:
+            wait_for_user_input()
         return
     
     elif args.subcommand == 'scan':
@@ -117,22 +156,31 @@ def main():
             drivers = driver_manager.find_drivers(hw)
             for driver in drivers:
                 print(f"  - {driver['name']} (source: {driver['source']})")
+        if args.keep_open:
+            wait_for_user_input()
         return
     
     elif args.subcommand == 'ai-status':
         from ai.ollama_manager import OllamaManager
+        print("Checking AI assistant status...")
         ollama = OllamaManager(config_manager)
         status = ollama.get_status()
         print(f"Ollama Status: {status['status']}")
         print(f"Model: {status.get('model', 'N/A')}")
+        if args.keep_open:
+            wait_for_user_input()
         return
     
     elif args.subcommand == 'monitor':
         print("Monitor command not yet implemented")
+        if args.keep_open:
+            wait_for_user_input()
         return
     
     elif args.subcommand == 'risk-assess':
         print("Risk assessment command not yet implemented")
+        if args.keep_open:
+            wait_for_user_input()
         return
     
     # Launch GUI by default
@@ -151,6 +199,8 @@ def main():
     except ImportError:
         print("PyQt6 is not installed. Install it with: pip3 install PyQt6")
         print("Or use CLI mode with commands like: driver-mgt status")
+        if args.keep_open:
+            wait_for_user_input()
         sys.exit(1)
 
 if __name__ == '__main__':
