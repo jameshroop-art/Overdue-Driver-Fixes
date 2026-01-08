@@ -69,6 +69,9 @@ def parse_arguments():
     # AI status command
     subparsers.add_parser('ai-status', help='Check AI assistant status')
     
+    # AI signin command
+    subparsers.add_parser('ai-signin', help='Sign in to Ollama with Google authentication')
+    
     # Monitor command
     monitor_parser = subparsers.add_parser('monitor', help='Driver monitoring control')
     monitor_parser.add_argument('--enable', action='store_true', help='Enable monitoring')
@@ -189,6 +192,17 @@ def main():
             wait_for_user_input()
         return
     
+    elif args.subcommand == 'ai-signin':
+        from ai.ollama_manager import OllamaManager
+        print("Starting Ollama sign-in process...")
+        ollama = OllamaManager(config_manager)
+        result = ollama.signin()
+        if not result.get('success'):
+            sys.exit(1)
+        if args.keep_open:
+            wait_for_user_input()
+        return
+    
     elif args.subcommand == 'monitor':
         print("Monitor command not yet implemented")
         if args.keep_open:
@@ -207,6 +221,8 @@ def main():
         print("Running in CLI mode. Available commands:")
         print("  driver-mgt status       - Check system status")
         print("  driver-mgt scan         - Scan for hardware and drivers")
+        print("  driver-mgt ai-status    - Check AI assistant status")
+        print("  driver-mgt ai-signin    - Sign in to Ollama (required for some models)")
         print("  driver-mgt --check-deps - Check dependencies")
         print("")
         print("To use GUI mode:")

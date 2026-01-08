@@ -159,10 +159,19 @@ class DeviceTab(QWidget):
         group = QGroupBox("Device Information")
         layout = QVBoxLayout()
         
-        info_table = QTableWidget(5, 2)
+        # Check if this is a motherboard to show additional info
+        is_motherboard = self.hardware.get('type') == 'Motherboard'
+        
+        if is_motherboard:
+            # Extended info for motherboard
+            row_count = 9  # More rows for BIOS, chipset, compatibility
+        else:
+            row_count = 5
+        
+        info_table = QTableWidget(row_count, 2)
         info_table.setHorizontalHeaderLabels(["Property", "Value"])
         info_table.verticalHeader().setVisible(False)
-        info_table.setMaximumHeight(200)
+        info_table.setMaximumHeight(200 if not is_motherboard else 350)
         
         properties = [
             ("Type", self.hardware.get('type', 'Unknown')),
@@ -172,6 +181,15 @@ class DeviceTab(QWidget):
             ("Model", self.hardware.get('model', self.hardware.get('name', 'N/A')))
         ]
         
+        # Add motherboard-specific information
+        if is_motherboard:
+            properties.extend([
+                ("BIOS Version", self.hardware.get('bios_version', 'N/A')),
+                ("BIOS Date", self.hardware.get('bios_date', 'N/A')),
+                ("Chipset", self.hardware.get('chipset', 'Unknown')),
+                ("Linux Support", self.hardware.get('linux_compatible', {}).get('linux_support', 'Unknown'))
+            ])
+        
         for i, (key, value) in enumerate(properties):
             info_table.setItem(i, 0, QTableWidgetItem(key))
             info_table.setItem(i, 1, QTableWidgetItem(str(value)))
@@ -179,8 +197,72 @@ class DeviceTab(QWidget):
         info_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(info_table)
         
+        # Add Linux compatibility info for motherboards
+        if is_motherboard:
+            compat_info = self.hardware.get('linux_compatible', {})
+            if compat_info.get('status') == 'supported':
+                compat_widget = self._create_compatibility_widget(compat_info)
+                layout.addWidget(compat_widget)
+        
         group.setLayout(layout)
         return group
+    
+    def _create_compatibility_widget(self, compat_info):
+        """Create widget showing Linux compatibility information"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Title
+        title = QLabel("🐧 Linux Compatibility")
+        title.setStyleSheet("font-weight: bold; font-size: 12px;")
+        layout.addWidget(title)
+        
+        # Support status
+        support_level = compat_info.get('linux_support', 'Unknown')
+        support_label = QLabel(f"Support Level: {support_level}")
+        
+        # Color code based on support level
+        if support_level == 'Good':
+            support_label.setStyleSheet("color: green;")
+        elif support_level == 'Moderate':
+            support_label.setStyleSheet("color: orange;")
+        else:
+            support_label.setStyleSheet("color: gray;")
+        
+        layout.addWidget(support_label)
+        
+        # Notes
+        notes = compat_info.get('notes', '')
+        if notes:
+            notes_label = QLabel(notes)
+            notes_label.setWordWrap(True)
+            notes_label.setStyleSheet("font-size: 10px; color: gray;")
+            layout.addWidget(notes_label)
+        
+        # Links to manufacturer support
+        if compat_info.get('support_url'):
+            link_layout = QHBoxLayout()
+            
+            support_btn = QPushButton("Manufacturer Support")
+            support_btn.clicked.connect(lambda: self._open_url(compat_info.get('support_url')))
+            link_layout.addWidget(support_btn)
+            
+            if compat_info.get('drivers_url'):
+                drivers_btn = QPushButton("Download Drivers")
+                drivers_btn.clicked.connect(lambda: self._open_url(compat_info.get('drivers_url')))
+                link_layout.addWidget(drivers_btn)
+            
+            link_layout.addStretch()
+            layout.addLayout(link_layout)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def _open_url(self, url):
+        """Open URL in default browser"""
+        import webbrowser
+        webbrowser.open(url)
     
     def create_current_driver_section(self):
         """Create current driver information section"""
@@ -923,6 +1005,13 @@ Estimated Recovery Time: 2-5 minutes"""
         self.chat_enable_checkbox.stateChanged.connect(self.toggle_chat)
         header_layout.addWidget(self.chat_enable_checkbox)
         
+        # Sign-in button
+        signin_btn = QPushButton("Sign In to Ollama")
+        signin_btn.setToolTip("Sign in to Ollama with Google authentication to access restricted models")
+        signin_btn.clicked.connect(self.signin_ollama)
+        header_layout.addWidget(signin_btn)
+        
+        header_layout.addStretch()
         layout.addLayout(header_layout)
         
         # Chat display
@@ -966,8 +1055,24 @@ Estimated Recovery Time: 2-5 minutes"""
                 QMessageBox.warning(
                     self,
                     "AI Not Available",
-                    "Ollama AI service is not running.\n"
-                    "Please start Ollama service and ensure starcoder:3b model is installed."
+                    "Ollama AI service is not running.\n\n"
+                    "To use the AI chat feature:\n"
+                    "1. Install Ollama: https://ollama.ai/\n"
+                    "2. Start Ollama service\n"
+                    "3. Install the model: ollama pull starcoder:3b"
+                )
+                self.chat_enable_checkbox.setChecked(False)
+                return
+            
+            # Check if model is installed
+            model_name = self.ollama_manager.model
+            if status.get('model') == 'not_installed':
+                QMessageBox.warning(
+                    self,
+                    "Model Not Installed",
+                    f"The {model_name} model is not installed.\n\n"
+                    f"To install it, run this command in a terminal:\n"
+                    f"ollama pull {model_name}"
                 )
                 self.chat_enable_checkbox.setChecked(False)
                 return
@@ -980,6 +1085,7 @@ Estimated Recovery Time: 2-5 minutes"""
             self.chat_display.append(
                 "<b style='color: green;'>Chat enabled. You can now communicate with starcoder:3b AI.</b><br>"
                 f"<i>Context: {self.hardware.get('name', 'Device')} driver management</i><br><br>"
+                "<i style='color: gray;'>Note: This is an AI assistant. Type your questions or describe issues you're experiencing.</i><br><br>"
             )
         else:
             # Disable chat interface
@@ -1040,3 +1146,53 @@ Estimated Recovery Time: 2-5 minutes"""
                 "<b style='color: green;'>Chat cleared.</b><br>"
                 f"<i>Context: {self.hardware.get('name', 'Device')} driver management</i><br><br>"
             )
+    
+    def signin_ollama(self):
+        """Sign in to Ollama with Google authentication"""
+        # Show information dialog
+        reply = QMessageBox.question(
+            self,
+            "Sign In to Ollama",
+            "This will open your browser for Google authentication.\n\n"
+            "Some models (like starcoder) may require you to sign in to Ollama "
+            "before you can download them.\n\n"
+            "After signing in, your credentials will be cached locally.\n\n"
+            "Continue with sign-in?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Show progress message
+            self.chat_display.append(
+                "<b style='color: blue;'>Initiating Ollama sign-in...</b><br>"
+                "<i>A browser window will open for authentication.</i><br>"
+                "<i>This dialog will update when sign-in is complete.</i><br><br>"
+            )
+            self.chat_display.repaint()
+            
+            # Perform sign-in (this will open a browser)
+            result = self.ollama_manager.signin()
+            
+            if result.get('success'):
+                QMessageBox.information(
+                    self,
+                    "Sign-In Successful",
+                    "Successfully signed in to Ollama!\n\n"
+                    "You can now pull models that require authentication."
+                )
+                self.chat_display.append(
+                    "<b style='color: green;'>✓ Successfully signed in to Ollama</b><br>"
+                    "<i>You can now install starcoder:3b model if needed.</i><br><br>"
+                )
+            else:
+                error_msg = result.get('error', 'Unknown error')
+                QMessageBox.warning(
+                    self,
+                    "Sign-In Failed",
+                    f"Failed to sign in to Ollama:\n\n{error_msg}\n\n"
+                    "You can also try signing in manually from a terminal:\n"
+                    "ollama signin"
+                )
+                self.chat_display.append(
+                    f"<b style='color: red;'>✗ Sign-in failed: {error_msg}</b><br><br>"
+                )

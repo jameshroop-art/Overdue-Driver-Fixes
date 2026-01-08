@@ -5,9 +5,10 @@ Detects and identifies hardware components
 
 import subprocess
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 from utils.terminal import run_with_output
+import requests
 
 class HardwareDetector:
     """Detects hardware components in the system"""
@@ -198,7 +199,7 @@ class HardwareDetector:
         return info
     
     def _detect_motherboard(self) -> List[Dict[str, Any]]:
-        """Detect motherboard/chipset"""
+        """Detect motherboard/chipset with BIOS information and update checking"""
         boards = []
         
         try:
@@ -207,20 +208,341 @@ class HardwareDetector:
             if dmi_path.exists():
                 board_vendor = self._read_dmi_file(dmi_path / 'board_vendor')
                 board_name = self._read_dmi_file(dmi_path / 'board_name')
+                board_version = self._read_dmi_file(dmi_path / 'board_version')
+                
+                # Read BIOS information
+                bios_vendor = self._read_dmi_file(dmi_path / 'bios_vendor')
+                bios_version = self._read_dmi_file(dmi_path / 'bios_version')
+                bios_date = self._read_dmi_file(dmi_path / 'bios_date')
                 
                 if board_vendor and board_name:
-                    boards.append({
+                    # Detect chipset from lspci
+                    chipset_info = self._detect_chipset()
+                    
+                    # Check Linux compatibility and search for repos
+                    compat_info = self._check_linux_compatibility(board_vendor, board_name)
+                    
+                    board_info = {
                         'type': 'Motherboard',
                         'name': f"{board_vendor} {board_name}",
                         'vendor': board_vendor,
                         'model': board_name,
-                        'driver': None
-                    })
+                        'board_version': board_version,
+                        'bios_vendor': bios_vendor,
+                        'bios_version': bios_version,
+                        'bios_date': bios_date,
+                        'chipset': chipset_info.get('name', 'Unknown') if chipset_info else 'Unknown',
+                        'chipset_vendor': chipset_info.get('vendor', 'Unknown') if chipset_info else 'Unknown',
+                        'driver': None,
+                        'linux_compatible': compat_info
+                    }
+                    
+                    # Check for BIOS updates if we have version info
+                    if bios_version:
+                        bios_update_info = self.check_bios_updates(board_vendor, board_name, bios_version)
+                        board_info['bios_update_info'] = bios_update_info
+                    
+                    boards.append(board_info)
         
         except Exception as e:
             print(f"Error detecting motherboard: {e}")
         
         return boards
+    
+    def _detect_chipset(self) -> Dict[str, Any]:
+        """Detect motherboard chipset from lspci"""
+        try:
+            show_output = self.config.get('cli.show_subprocess_output', False)
+            result = run_with_output(
+                ['lspci'],
+                show_output=show_output,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    # Look for host bridge, ISA bridge, or LPC bridge
+                    if any(keyword in line.lower() for keyword in ['host bridge', 'isa bridge', 'lpc']):
+                        # Extract chipset info
+                        vendor = None
+                        name = line
+                        
+                        if 'Intel' in line:
+                            vendor = 'Intel'
+                            # Extract chipset model - try multiple patterns
+                            # Pattern 1: Standard chipset naming (e.g., "Z690", "H610")
+                            match = re.search(r'\b([ZBHQX]\d{3,4}[A-Z]*)\b', line)
+                            if not match:
+                                # Pattern 2: Full description with Chipset/Series
+                                match = re.search(r'Intel.*?(\d{3,4}\s*[A-Z]*\s*(?:Chipset|Series))', line)
+                            if match:
+                                name = match.group(1)
+                        elif 'AMD' in line:
+                            vendor = 'AMD'
+                            # Extract chipset model with broader pattern
+                            # Covers: X570, B550, A520, X670E, TRX40, WRX80, etc.
+                            match = re.search(r'\b([ABXTW][R]?[X]?\d{3,4}[A-Z]*)\b', line)
+                            if match:
+                                name = match.group(1)
+                        
+                        if vendor:
+                            return {'vendor': vendor, 'name': name}
+        except Exception as e:
+            print(f"Error detecting chipset: {e}")
+        
+        return None
+    
+    def _check_linux_compatibility(self, vendor: str, model: str) -> Dict[str, Any]:
+        """Check Linux compatibility for motherboard manufacturer
+        
+        Returns dict with compatibility info and manufacturer support URL
+        """
+        if not vendor or not model:
+            return {
+                'status': 'unknown', 
+                'support_url': None, 
+                'drivers_url': None,
+                'notes': 'Insufficient information'
+            }
+        
+        vendor_lower = vendor.lower()
+        
+        # Manufacturer Linux support information
+        manufacturer_info = {
+            'asus': {
+                'name': 'ASUS',
+                'linux_support': 'Good',
+                'support_url': 'https://www.asus.com/support/',
+                'drivers_url': 'https://www.asus.com/support/download-center/',
+                'notes': 'ASUS provides Linux drivers for most motherboards. Check support site for specific model.'
+            },
+            'msi': {
+                'name': 'MSI',
+                'linux_support': 'Good',
+                'support_url': 'https://www.msi.com/support',
+                'drivers_url': 'https://www.msi.com/support/download',
+                'notes': 'MSI motherboards generally work well with Linux. Some RGB/fan control may need third-party tools.'
+            },
+            'gigabyte': {
+                'name': 'Gigabyte',
+                'linux_support': 'Good',
+                'support_url': 'https://www.gigabyte.com/Support',
+                'drivers_url': 'https://www.gigabyte.com/Support/Motherboard',
+                'notes': 'Gigabyte motherboards have good Linux compatibility. Check for chipset driver support.'
+            },
+            'asrock': {
+                'name': 'ASRock',
+                'linux_support': 'Good',
+                'support_url': 'https://www.asrock.com/support/',
+                'drivers_url': 'https://www.asrock.com/support/download.asp',
+                'notes': 'ASRock motherboards work well with Linux. Most features supported out-of-box.'
+            },
+            'evga': {
+                'name': 'EVGA',
+                'linux_support': 'Moderate',
+                'support_url': 'https://www.evga.com/support/',
+                'drivers_url': 'https://www.evga.com/support/download/',
+                'notes': 'EVGA motherboards generally compatible. Some utilities Windows-only.'
+            },
+            'biostar': {
+                'name': 'Biostar',
+                'linux_support': 'Moderate',
+                'support_url': 'https://www.biostar.com.tw/app/en/support/',
+                'drivers_url': 'https://www.biostar.com.tw/app/en/support/download.php',
+                'notes': 'Basic Linux support. Most hardware works but limited manufacturer utilities.'
+            }
+        }
+        
+        # Try to match vendor
+        for key, info in manufacturer_info.items():
+            if key in vendor_lower or info['name'].lower() in vendor_lower:
+                return {
+                    'status': 'supported',
+                    'manufacturer': info['name'],
+                    'linux_support': info['linux_support'],
+                    'support_url': info['support_url'],
+                    'drivers_url': info['drivers_url'],
+                    'notes': info['notes'],
+                    'model': model
+                }
+        
+        # Unknown manufacturer - try to find repos
+        compat_info = {
+            'status': 'unknown',
+            'manufacturer': vendor,
+            'linux_support': 'Unknown',
+            'support_url': None,
+            'drivers_url': None,
+            'notes': f'Linux compatibility for {vendor} motherboards not verified. Check manufacturer website.',
+            'model': model
+        }
+        
+        # Search for repos if manufacturer not in database
+        repos = self._search_manufacturer_repos(vendor, model)
+        if repos:
+            compat_info['repos'] = repos
+            compat_info['notes'] = f'Found {len(repos)} community/manufacturer repos for Linux support.'
+        
+        return compat_info
+    
+    def _search_manufacturer_repos(self, vendor: str, model: str) -> List[Dict[str, Any]]:
+        """Search for manufacturer and community repos on GitHub
+        
+        Searches for:
+        1. Official manufacturer repos
+        2. User repos with driver/BIOS updates
+        3. Linux compatibility tools
+        
+        Returns list of repos with Linux-compatible updates
+        """
+        repos = []
+        
+        if not vendor:
+            return repos
+        
+        try:
+            # Search terms for manufacturer repos
+            search_terms = [
+                f"{vendor} linux driver",
+                f"{vendor} linux bios",
+                f"{vendor} motherboard linux",
+                f"{vendor} chipset linux"
+            ]
+            
+            for search_term in search_terms:
+                try:
+                    # Use GitHub API to search repos
+                    url = "https://api.github.com/search/repositories"
+                    params = {
+                        'q': search_term,
+                        'sort': 'stars',
+                        'order': 'desc',
+                        'per_page': 5
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=10)
+                    
+                    # Handle rate limiting and errors
+                    if response.status_code == 403:
+                        print(f"⚠ GitHub API rate limit reached")
+                        break
+                    elif response.status_code != 200:
+                        print(f"⚠ GitHub API returned status {response.status_code}")
+                        continue
+                    
+                    data = response.json()
+                    items = data.get('items', [])
+                    
+                    for item in items:
+                        # Check if repo seems relevant
+                        repo_name = item.get('name', '').lower()
+                        repo_desc = (item.get('description') or '').lower()
+                        repo_full_name = item.get('full_name', '')
+                        repo_owner = repo_full_name.split('/')[0].lower() if '/' in repo_full_name else ''
+                        
+                        # Check for relevance
+                        is_relevant = (
+                            vendor.lower() in repo_name or
+                            vendor.lower() in repo_desc or
+                            'driver' in repo_name or
+                            'bios' in repo_name or
+                            'linux' in repo_name or
+                            'motherboard' in repo_name
+                        )
+                        
+                        # Better official repo detection
+                        # Only mark as official if:
+                        # 1. Owner exactly matches vendor name, OR
+                        # 2. Owner is a known official account
+                        official_accounts = {
+                            'asus': ['asus', 'asus-linux'],
+                            'msi': ['msi', 'msi-gaming'],
+                            'gigabyte': ['gigabyte', 'gigabyte-technology'],
+                            'asrock': ['asrock'],
+                        }
+                        
+                        is_official = False
+                        vendor_key = vendor.lower()
+                        if vendor_key in official_accounts:
+                            is_official = repo_owner in official_accounts[vendor_key]
+                        else:
+                            is_official = repo_owner == vendor_key
+                        
+                        if is_relevant and item.get('html_url'):
+                            repo_info = {
+                                'name': item.get('name'),
+                                'full_name': repo_full_name,
+                                'url': item.get('html_url'),
+                                'description': item.get('description', 'No description'),
+                                'stars': item.get('stargazers_count', 0),
+                                'official': is_official
+                            }
+                            
+                            # Avoid duplicates
+                            if not any(r['url'] == repo_info['url'] for r in repos):
+                                repos.append(repo_info)
+                    
+                    # Limit to top 10 repos total
+                    if len(repos) >= 10:
+                        break
+                
+                except requests.exceptions.Timeout:
+                    print(f"⚠ GitHub API timeout for search: {search_term}")
+                    continue
+                except requests.exceptions.ConnectionError:
+                    print(f"⚠ Cannot connect to GitHub API")
+                    break
+                except requests.exceptions.RequestException as e:
+                    print(f"⚠ GitHub API error: {e}")
+                    continue
+                except Exception as e:
+                    # Continue with other search terms on error
+                    print(f"⚠ Error parsing GitHub response: {e}")
+                    continue
+        
+        except Exception as e:
+            print(f"Error searching repos: {e}")
+        
+        # Sort repos: official first, then by stars
+        repos.sort(key=lambda x: (not x['official'], -x['stars']))
+        return repos[:10]  # Return top 10
+    
+    def check_bios_updates(self, vendor: str, model: str, current_version: str) -> Dict[str, Any]:
+        """Check for BIOS updates from manufacturer
+        
+        Args:
+            vendor: Motherboard vendor
+            model: Motherboard model
+            current_version: Current BIOS version
+            
+        Returns:
+            Dict with update availability and download info
+        """
+        result = {
+            'update_available': False,
+            'current_version': current_version,
+            'latest_version': None,
+            'download_url': None,
+            'notes': 'Unable to check for updates automatically. Please visit manufacturer website.'
+        }
+        
+        # Get compatibility info which includes manufacturer URLs
+        compat = self._check_linux_compatibility(vendor, model)
+        
+        if compat.get('drivers_url'):
+            result['check_url'] = compat['drivers_url']
+            result['notes'] = f"Visit {compat['manufacturer']} support site to check for BIOS updates: {compat['drivers_url']}"
+        
+        # Check repos for BIOS updates
+        repos = self._search_manufacturer_repos(vendor, model)
+        if repos:
+            bios_repos = [r for r in repos if 'bios' in r['name'].lower() or 'firmware' in r['name'].lower()]
+            if bios_repos:
+                result['community_repos'] = bios_repos
+                result['notes'] += f"\n\nFound {len(bios_repos)} community repos with potential BIOS/firmware updates."
+        
+        return result
     
     def _read_dmi_file(self, path: Path) -> str:
         """Read DMI file content"""

@@ -45,12 +45,23 @@ class DriverManager:
     
     def check_source_connectivity(self, source_url: str) -> bool:
         """Check if a driver source is accessible"""
+        # Skip connectivity check for non-HTTP URLs (e.g., PPA URLs)
+        if not source_url.startswith(('http://', 'https://')):
+            # PPA and other non-HTTP sources are checked by package manager
+            return True
+        
         try:
-            response = requests.head(source_url, timeout=5, allow_redirects=True)
+            # Increased timeout to 15 seconds for slow networks
+            response = requests.head(source_url, timeout=15, allow_redirects=True)
             return response.status_code < 400
+        except requests.exceptions.Timeout:
+            print(f"Source connectivity check timed out for {source_url}")
+            # Return True to allow installation attempt anyway
+            return True
         except Exception as e:
             print(f"Source connectivity check failed for {source_url}: {e}")
-            return False
+            # Return True to allow installation attempt anyway
+            return True
     
     def connect_to_driver_sources(self, vendor: str) -> Dict[str, bool]:
         """Connect to driver sources for a specific vendor"""
