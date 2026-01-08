@@ -11,13 +11,21 @@ from typing import Dict, Any
 class ConfigManager:
     """Manages application configuration"""
     
-    # Path to config templates (relative to package root)
-    CONFIG_TEMPLATE_DIR = Path(__file__).parent.parent.parent / 'config'
+    # Path to config templates (multiple possible locations)
+    CONFIG_TEMPLATE_PATHS = [
+        Path(__file__).parent.parent.parent / 'config',  # Running from source
+        Path('/opt/driver-mgt/config'),  # Installed system-wide
+        Path('/usr/share/driver-mgt/config'),  # Installed via setup.py
+        Path('/usr/local/share/driver-mgt/config'),  # Alternate install location
+    ]
     
     def __init__(self):
         self.config_dir = Path.home() / '.config' / 'driver-mgt'
         self.config_file = self.config_dir / 'config.json'
         self.ai_config_file = self.config_dir / 'ai-config.json'
+        
+        # Find the config template directory
+        self.template_dir = self._find_template_dir()
         
         # Initialize directories
         self._init_directories()
@@ -25,6 +33,20 @@ class ConfigManager:
         # Load configuration
         self.config = self._load_config()
         self.ai_config = self._load_ai_config()
+    
+    def _find_template_dir(self):
+        """
+        Find the configuration template directory
+        
+        Returns:
+            Path: Path to template directory if found, None otherwise.
+                  Calling code handles None by using default configs.
+        """
+        for path in self.CONFIG_TEMPLATE_PATHS:
+            if path.exists() and path.is_dir():
+                return path
+        # Return None if not found
+        return None
     
     def _init_directories(self):
         """Initialize configuration directories"""
@@ -47,16 +69,17 @@ class ConfigManager:
                 return json.load(f)
         else:
             # Load default configuration from template
-            template_path = self.CONFIG_TEMPLATE_DIR / 'config.json.template'
-            if template_path.exists():
-                with open(template_path, 'r') as f:
-                    config = json.load(f)
-                # Save default configuration
-                self._save_config(config)
-                return config
-            else:
-                # Return minimal default
-                return self._get_default_config()
+            if self.template_dir:
+                template_path = self.template_dir / 'config.json.template'
+                if template_path.exists():
+                    with open(template_path, 'r') as f:
+                        config = json.load(f)
+                    # Save default configuration
+                    self._save_config(config)
+                    return config
+            
+            # Return minimal default if template not found
+            return self._get_default_config()
     
     def _load_ai_config(self) -> Dict[str, Any]:
         """Load AI configuration file"""
@@ -65,16 +88,17 @@ class ConfigManager:
                 return json.load(f)
         else:
             # Load default AI configuration from template
-            template_path = self.CONFIG_TEMPLATE_DIR / 'ai-config.json.template'
-            if template_path.exists():
-                with open(template_path, 'r') as f:
-                    config = json.load(f)
-                # Save default configuration
-                self._save_ai_config(config)
-                return config
-            else:
-                # Return minimal default
-                return self._get_default_ai_config()
+            if self.template_dir:
+                template_path = self.template_dir / 'ai-config.json.template'
+                if template_path.exists():
+                    with open(template_path, 'r') as f:
+                        config = json.load(f)
+                    # Save default configuration
+                    self._save_ai_config(config)
+                    return config
+            
+            # Return minimal default if template not found
+            return self._get_default_ai_config()
     
     def _save_config(self, config: Dict[str, Any]):
         """Save main configuration file"""

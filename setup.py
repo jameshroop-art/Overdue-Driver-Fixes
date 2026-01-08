@@ -28,6 +28,16 @@ setup(
         'pyyaml>=6.0',
     ],
     scripts=['driver-mgt'],
+    package_data={
+        '': ['*.json', '*.template'],
+    },
+    include_package_data=True,
+    data_files=[
+        ('share/driver-mgt/config', [
+            'config/config.json.template',
+            'config/ai-config.json.template',
+        ]),
+    ],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: End Users/Desktop',
