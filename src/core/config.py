@@ -162,6 +162,7 @@ class ConfigManager:
             "lmstudio": {
                 "host": "localhost",
                 "port": 1234,
+                "additional_ports": [1235, 1236],
                 "auto_restore_config": True
             },
             "privacy": {

@@ -2,6 +2,7 @@
 Ollama Manager for AI-assisted driver management
 Handles Ollama integration and starcoder:3b model
 Enforces domain whitelist for security
+Enforces strict operational scope limitations
 """
 
 import subprocess
@@ -9,9 +10,10 @@ import requests
 from typing import Dict, Any
 from utils.terminal import run_with_output
 from utils.security import DomainValidator
+from ai.ai_security_manager import AISecurityManager
 
 class OllamaManager:
-    """Manages Ollama AI integration"""
+    """Manages Ollama AI integration with security constraints"""
     
     def __init__(self, config_manager):
         self.config = config_manager
@@ -20,8 +22,9 @@ class OllamaManager:
         self.model = self.config.get_ai('monitoring.model', 'starcoder:3b')
         self.base_url = f"http://{self.host}:{self.port}"
         
-        # Initialize domain validator for security
+        # Initialize security managers
         self.domain_validator = DomainValidator(config_manager)
+        self.security_manager = AISecurityManager(config_manager)
     
     def get_status(self) -> Dict[str, Any]:
         """Get Ollama service status"""
@@ -286,16 +289,27 @@ class OllamaManager:
             return False
     
     def analyze_error(self, error_log: str) -> Dict[str, Any]:
-        """Analyze error log using AI"""
+        """Analyze error log using AI with security constraints"""
         if not self.is_available():
             return {
                 'success': False,
                 'error': 'Ollama not available'
             }
         
-        # Sanitize error log to prevent prompt injection
-        # Limit length and remove potential injection patterns
-        sanitized_log = self._sanitize_log(error_log)
+        # Validate operation with security manager
+        is_allowed, reason = self.security_manager.validate_operation(
+            'analyze_driver_error',
+            {'error_messages': error_log[:1000]}  # Only include snippet for validation
+        )
+        
+        if not is_allowed:
+            return {
+                'success': False,
+                'error': f'Security violation: {reason}'
+            }
+        
+        # Sanitize error log to prevent prompt injection and remove sensitive data
+        sanitized_log = self.security_manager.sanitize_prompt(error_log, 'driver_analysis')
         
         prompt = f"""Analyze this driver installation error and suggest remediation:
 
@@ -305,34 +319,45 @@ Provide:
 1. Root cause
 2. Suggested fix
 3. Alternative approach if fix doesn't work
+
+IMPORTANT: Limit your response to driver-related analysis only. Do not suggest system modifications beyond driver operations.
 """
         
         return self.analyze_text(prompt)
     
     def analyze_text(self, prompt: str) -> Dict[str, Any]:
-        """Analyze text using AI model"""
+        """Analyze text using AI model with security constraints"""
         if not self.is_available():
             return {
                 'success': False,
                 'error': 'Ollama not available'
             }
         
+        # Sanitize prompt before sending to AI
+        sanitized_prompt = self.security_manager.sanitize_prompt(prompt, 'driver_analysis')
+        
         try:
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json={
                     'model': self.model,
-                    'prompt': prompt,
-                    'stream': False
+                    'prompt': sanitized_prompt,
+                    'stream': False,
+                    'system': 'You are a driver management assistant. Your responses must be limited to driver and hardware-related analysis only. Do not suggest or perform any system modifications beyond driver operations.'
                 },
                 timeout=30
             )
             
             if response.status_code == 200:
                 result = response.json()
+                analysis = result.get('response', '')
+                
+                # Sanitize response before returning
+                sanitized_analysis = self.security_manager.sanitize_response(analysis)
+                
                 return {
                     'success': True,
-                    'analysis': result.get('response', '')
+                    'analysis': sanitized_analysis
                 }
             elif response.status_code == 404:
                 # Model not found - provide helpful error message
