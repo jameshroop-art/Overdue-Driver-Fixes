@@ -250,6 +250,20 @@ Categories=System;Settings;
 EOF
 
 echo ""
+echo "Creating LLM Studio desktop launcher..."
+# Copy the LLM Studio wrapper script
+cp "$SCRIPT_DIR/driver-mgt-lmstudio" /usr/local/bin/driver-mgt-lmstudio
+chmod +x /usr/local/bin/driver-mgt-lmstudio
+
+# Install the desktop entry
+cp "$SCRIPT_DIR/driver-mgt-lmstudio.desktop" /usr/share/applications/driver-mgt-lmstudio.desktop
+chmod 644 /usr/share/applications/driver-mgt-lmstudio.desktop
+
+echo "✓ LLM Studio launcher installed"
+echo "  Desktop entry: /usr/share/applications/driver-mgt-lmstudio.desktop"
+echo "  Wrapper script: /usr/local/bin/driver-mgt-lmstudio"
+
+echo ""
 echo "Installation complete!"
 echo ""
 echo "A virtual environment has been created at $INSTALL_DIR/venv"
@@ -273,8 +287,13 @@ fi
 
 echo ""
 echo "You can now run driver-mgt with:"
-echo "  driver-mgt         (GUI mode)"
+echo "  driver-mgt         (GUI mode with Ollama)"
 echo "  driver-mgt status  (CLI mode)"
+echo ""
+echo "Or use the LLM Studio launcher:"
+echo "  driver-mgt-lmstudio         (Command line)"
+echo "  Desktop launcher available in applications menu: 'Driver Manager (LLM Studio)'"
+echo "  Note: LLM Studio must be running on http://localhost:1234 before using this launcher"
 echo ""
 echo "Configuration files are stored in:"
 echo "  $ACTUAL_HOME/.config/driver-mgt/"
@@ -282,5 +301,6 @@ echo ""
 echo "AI Features:"
 echo "  Ollama service: $(command -v ollama &> /dev/null && echo 'Installed' || echo 'Not installed')"
 echo "  starcoder:3b model: $(ollama list 2>/dev/null | grep -q starcoder && echo 'Available' || echo 'Not pulled')"
+echo "  LLM Studio launcher: Installed (requires LLM Studio to be running separately)"
 echo "  AI monitoring and chat interface available in GUI"
 echo ""

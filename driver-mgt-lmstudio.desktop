@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Driver Manager (LLM Studio)
+Comment=Advanced Linux Driver Management with LLM Studio AI
+Exec=pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY /usr/local/bin/driver-mgt-lmstudio
+Icon=preferences-system
+Terminal=true
+Categories=System;Settings;
+Keywords=driver;hardware;nvidia;amd;wifi;cooling;AI;
+StartupNotify=true
