@@ -48,6 +48,59 @@ echo ""
 # Install Python and pip
 echo "Installing Python and dependencies..."
 if [ "$PKG_MANAGER" = "apt" ]; then
+    # Fix missing GPG keys for Ubuntu repositories
+    echo "Ensuring Ubuntu repository GPG keys are present..."
+    
+    # Import Ubuntu archive signing keys if missing
+    # These keys are needed for Ubuntu focal and other releases
+    UBUNTU_KEYS=("3B4FE6ACC0B21F32" "871920D1991BC93C")
+    
+    for key in "${UBUNTU_KEYS[@]}"; do
+        # Check if key already exists (check both old and new locations)
+        KEY_EXISTS=false
+        if apt-key list 2>/dev/null | grep -q "$key"; then
+            KEY_EXISTS=true
+        elif gpg --no-default-keyring --keyring /usr/share/keyrings/ubuntu-archive-keyring.gpg --list-keys 2>/dev/null | grep -q "$key"; then
+            KEY_EXISTS=true
+        fi
+        
+        if [ "$KEY_EXISTS" = false ]; then
+            echo "Importing Ubuntu key: $key"
+            # Try multiple keyservers in case one is down
+            KEYSERVERS=("keyserver.ubuntu.com" "keys.openpgp.org" "pgp.mit.edu")
+            KEY_IMPORTED=false
+            
+            for keyserver in "${KEYSERVERS[@]}"; do
+                # Try modern gpg method first (for newer systems)
+                if command -v gpg &> /dev/null; then
+                    if gpg --no-default-keyring --keyring /usr/share/keyrings/ubuntu-archive-keyring.gpg \
+                        --keyserver "hkp://$keyserver:80" --recv-keys "$key" 2>/dev/null; then
+                        echo "✓ Successfully imported key $key from $keyserver (using gpg)"
+                        KEY_IMPORTED=true
+                        break
+                    fi
+                fi
+                
+                # Fallback to apt-key for older systems
+                if command -v apt-key &> /dev/null; then
+                    if apt-key adv --keyserver "hkp://$keyserver:80" --recv-keys "$key" 2>/dev/null; then
+                        echo "✓ Successfully imported key $key from $keyserver (using apt-key)"
+                        KEY_IMPORTED=true
+                        break
+                    fi
+                fi
+            done
+            
+            if [ "$KEY_IMPORTED" = false ]; then
+                echo "⚠ Warning: Could not import key $key from any keyserver"
+                echo "  This may cause repository signature verification warnings"
+                echo "  You can manually import with: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys $key"
+            fi
+        else
+            echo "✓ Key $key already present"
+        fi
+    done
+    
     apt-get update
     
     # Debian 12 (Bookworm) specific packages
