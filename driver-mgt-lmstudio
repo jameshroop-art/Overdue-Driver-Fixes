@@ -1,7 +1,7 @@
 #!/bin/bash
-# Wrapper script for driver-mgt with LLM Studio backend
+# Wrapper script for driver-mgt with LLM Studio backend and VM support
 # This script is designed to be launched with sudo/pkexec
-# It configures LLM Studio mode and handles cleanup on exit
+# It configures LLM Studio mode, VM bridge, and handles cleanup on exit
 
 set -e
 
@@ -9,17 +9,18 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo "=========================================="
-echo "driver-mgt - LLM Studio Mode"
+echo "driver-mgt - LLM Studio Mode with VM Bridge"
 echo "=========================================="
 echo ""
 
 # Check if we're running as root (via sudo/pkexec)
 if [ "$EUID" -ne 0 ]; then 
     echo -e "${YELLOW}Warning: Not running with elevated privileges${NC}"
-    echo "Some driver operations may require sudo access"
+    echo "Some operations may require sudo access"
     echo ""
 fi
 
@@ -33,7 +34,7 @@ else
 fi
 
 echo "Running as user: $ACTUAL_USER"
-echo "Using LLM Studio AI backend"
+echo "Features: LLM Studio AI + Windows Driver VM Bridge"
 echo ""
 
 # Path to driver-mgt installation
@@ -56,10 +57,13 @@ cleanup() {
     echo "Shutting down driver-mgt..."
     echo "=========================================="
     echo ""
-    echo "Restoring LLM Studio configuration..."
+    echo -e "${BLUE}Cleaning up resources...${NC}"
     
     # The Python application handles cleanup in its shutdown method
-    # This message is just for user information
+    # This includes:
+    # - Stopping VM if running
+    # - Restoring LLM Studio configuration
+    # - Re-enabling telemetry
     
     echo -e "${GREEN}✓ Cleanup complete${NC}"
     echo ""
@@ -68,8 +72,10 @@ cleanup() {
 # Register cleanup function to run on exit
 trap cleanup EXIT
 
-# Set environment variable to use LLM Studio backend
+# Set environment variables
 export DRIVER_MGT_AI_BACKEND="lmstudio"
+export DRIVER_MGT_ENABLE_VM="true"  # Enable VM bridge functionality
+export DRIVER_MGT_DISABLE_TELEMETRY="true"  # Disable LLM Studio telemetry
 
 # If running as root, we need to ensure the display is accessible
 if [ "$EUID" -eq 0 ] && [ -n "$DISPLAY" ]; then
@@ -85,7 +91,7 @@ if [ "$EUID" -eq 0 ] && [ -n "$DISPLAY" ]; then
 fi
 
 # Check if LLM Studio is running
-echo "Checking LLM Studio status..."
+echo -e "${BLUE}Checking LLM Studio status...${NC}"
 if curl -s --connect-timeout 2 http://localhost:1234/v1/models >/dev/null 2>&1; then
     echo -e "${GREEN}✓ LLM Studio is running${NC}"
 else
@@ -100,18 +106,33 @@ else
     exit 1
 fi
 
+# Check VM support
+echo -e "${BLUE}Checking VM support...${NC}"
+if command -v qemu-system-x86_64 >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ QEMU installed - VM bridge available${NC}"
+    if [ -e /dev/kvm ]; then
+        echo -e "${GREEN}✓ KVM acceleration available${NC}"
+    else
+        echo -e "${YELLOW}⚠ KVM not available - VM will be slower${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ QEMU not installed - VM features disabled${NC}"
+    echo "  Install with: sudo apt-get install qemu-system-x86"
+    export DRIVER_MGT_ENABLE_VM="false"
+fi
+
 echo ""
-echo "Starting driver-mgt with LLM Studio backend..."
+echo -e "${BLUE}Starting driver-mgt with:${NC}"
+echo "  - LLM Studio AI backend"
+echo "  - VM bridge for Windows drivers"
+echo "  - Telemetry disabled"
 echo ""
 
-# Run driver-mgt with LLM Studio backend
-# The --gui flag is default, but we specify it explicitly
-# Keep terminal open by default for user to see any messages
+# Run driver-mgt with LLM Studio backend and VM support
 cd "$DRIVER_MGT_DIR"
 
 if [ "$EUID" -eq 0 ] && [ -n "$ACTUAL_USER" ] && [ "$ACTUAL_USER" != "root" ]; then
-    # If running as root via sudo, preserve user environment and run as user for GUI
-    # but keep root privileges for driver operations
+    # If running as root via sudo, preserve user environment
     "$DRIVER_MGT_DIR/venv/bin/python" "$DRIVER_MGT_BIN" --gui
 else
     # Normal execution
