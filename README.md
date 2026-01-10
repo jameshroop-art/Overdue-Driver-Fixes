@@ -186,6 +186,32 @@ sudo bash install.sh
 driver-mgt
 ```
 
+### Alternative: Development Mode with start.sh
+
+For development or running directly from the repository:
+
+```bash
+# Clone the repository
+git clone https://github.com/jameshroop-art/driver-mgt.git
+cd driver-mgt
+
+# Use the start script (automatically creates venv and installs dependencies)
+./start.sh
+
+# Or for specific commands
+./start.sh status
+./start.sh --check-deps
+./start.sh --help
+```
+
+The `start.sh` script will:
+- Create a virtual environment if it doesn't exist
+- Install all dependencies from requirements.txt
+- Verify all dependencies are installed
+- Activate the venv and launch driver-mgt
+- Support both GUI and CLI modes
+- Work in both development and installed modes
+
 The installer will:
 - Install all required dependencies (Python 3.9+, PyQt6, etc.)
 - Create isolated virtual environment at `/opt/driver-mgt/venv`
@@ -198,6 +224,16 @@ The installer will:
 - Scan for official manufacturer repositories
 
 **Note**: The GUI and program are fully integrated. The same `driver-mgt` command provides both GUI and CLI interfaces.
+
+### Virtual Environment Details
+
+driver-mgt uses Python virtual environments to ensure dependency isolation and PEP 668 compliance:
+
+- **Installed Mode**: Virtual environment at `/opt/driver-mgt/venv`
+- **Development Mode**: Virtual environment at `./venv` in repository root
+- All Python dependencies are installed in the venv (PyQt6, psutil, requests, pyyaml, setuptools)
+- The venv is automatically activated when using `driver-mgt` or `start.sh`
+- No system-wide pip installations required (Debian 12 compliant)
 
 ## 📋 Requirements
 
