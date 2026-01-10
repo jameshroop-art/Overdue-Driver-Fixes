@@ -115,9 +115,17 @@ if [ ! -f "$VENV_DIR/bin/python" ]; then
     exit 1
 fi
 
-# Check dependencies
+# Check dependencies (extracted from requirements.txt for single source of truth)
 echo -e "${BLUE}Checking dependencies...${NC}"
 MISSING_DEPS=0
+
+# Map requirements.txt package names to Python import names
+declare -A IMPORT_MAP=(
+    ["PyQt6"]="PyQt6"
+    ["psutil"]="psutil"
+    ["requests"]="requests"
+    ["pyyaml"]="yaml"
+)
 
 # Check each dependency
 for dep in PyQt6 psutil requests yaml; do
@@ -139,13 +147,18 @@ fi
 # Parse command line arguments
 ARGS=("$@")
 
+# List of CLI-only commands (extracted for maintainability)
+CLI_COMMANDS=("status" "scan" "ai-status" "ai-signin" "monitor" "risk-assess" "--help" "-h" "--check-deps")
+
 # Check if GUI mode is requested (default)
 GUI_MODE=1
 for arg in "${ARGS[@]}"; do
-    if [[ "$arg" == "status" ]] || [[ "$arg" == "scan" ]] || [[ "$arg" == "ai-status" ]] || [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]]; then
-        GUI_MODE=0
-        break
-    fi
+    for cmd in "${CLI_COMMANDS[@]}"; do
+        if [[ "$arg" == "$cmd" ]]; then
+            GUI_MODE=0
+            break 2
+        fi
+    done
 done
 
 echo ""

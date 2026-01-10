@@ -81,7 +81,8 @@ run_test ".gitignore excludes venv" "grep -q '^venv/' .gitignore"
 echo "[$((TOTAL + 1))] Testing: All Python files have valid syntax"
 TOTAL=$((TOTAL + 1))
 SYNTAX_ERRORS=0
-for pyfile in $(find . -name "*.py" -not -path "./venv/*" -not -path "./test_venv/*"); do
+# Exclude all potential venv directories created during testing or development
+for pyfile in $(find . -name "*.py" -not -path "./venv/*" -not -path "./test_venv/*" -not -path "./test_venv_verify/*" -not -path "./.venv/*" -not -path "./env/*"); do
     if ! python3 -m py_compile "$pyfile" 2>/dev/null; then
         echo "  Syntax error in: $pyfile"
         SYNTAX_ERRORS=$((SYNTAX_ERRORS + 1))
