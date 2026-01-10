@@ -139,6 +139,7 @@ class ConfigManager:
     def _get_default_ai_config(self) -> Dict[str, Any]:
         """Get minimal default AI configuration"""
         return {
+            "backend": "ollama",
             "monitoring": {
                 "enabled": False,
                 "model": "starcoder:3b",
@@ -152,10 +153,27 @@ class ConfigManager:
                 "show_percentage": True,
                 "ai_remediation_check": True
             },
+            "ollama": {
+                "host": "localhost",
+                "port": 11434,
+                "auto_install": True,
+                "auto_shutdown": True
+            },
+            "lmstudio": {
+                "host": "localhost",
+                "port": 1234,
+                "additional_ports": [1235, 1236],
+                "auto_restore_config": True
+            },
             "privacy": {
                 "localhost_only": True,
                 "no_external_transmission": True,
                 "user_consent_required": True
+            },
+            "logging": {
+                "corrections_path": "~/.config/driver-mgt/corrections/",
+                "log_format": "plain_text",
+                "retention_days": 30
             },
             "security": {
                 "domain_whitelist": [

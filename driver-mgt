@@ -8,6 +8,7 @@ import sys
 import os
 import argparse
 from pathlib import Path
+import atexit
 
 # Set Qt platform plugin environment variable for headless/CI environments
 # This allows the application to run without X11 or Wayland display server
@@ -34,6 +35,15 @@ from core.config import ConfigManager
 from core.hardware_detector import HardwareDetector
 from core.driver_manager import DriverManager
 from utils.logger import setup_logger
+
+# Global AI manager instance for cleanup
+_ai_manager = None
+
+def cleanup_ai_backend():
+    """Cleanup AI backend on exit - restores LLM Studio config if needed"""
+    global _ai_manager
+    if _ai_manager:
+        _ai_manager.shutdown()
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -134,6 +144,8 @@ def can_use_gui():
 
 def main():
     """Main application entry point"""
+    global _ai_manager
+    
     args = parse_arguments()
     
     # Setup logger
@@ -151,6 +163,30 @@ def main():
     
     # Initialize configuration
     config_manager = ConfigManager()
+    
+    # Check if we should use LLM Studio backend (via environment variable)
+    ai_backend = os.environ.get('DRIVER_MGT_AI_BACKEND', None)
+    if ai_backend:
+        logger.info(f"Using AI backend from environment: {ai_backend}")
+        config_manager.set_ai('backend', ai_backend)
+    else:
+        ai_backend = config_manager.get_ai('backend', 'ollama')
+    
+    # Initialize AI manager with selected backend
+    from ai.ai_manager import AIManager
+    _ai_manager = AIManager(config_manager, backend=ai_backend)
+    
+    # Register cleanup handler to restore LLM Studio config on exit
+    atexit.register(cleanup_ai_backend)
+    
+    # Configure AI backend if using LLM Studio
+    if ai_backend == 'lmstudio':
+        logger.info("Configuring LLM Studio backend...")
+        if not _ai_manager.configure_for_driver_mgt():
+            print("Warning: Failed to configure LLM Studio backend")
+            print("Continuing anyway...")
+    
+    logger.info(f"Using AI backend: {ai_backend}")
     
     # Set CLI configuration for subprocess output visibility
     config_manager.set('cli.show_subprocess_output', args.show_output)
@@ -182,11 +218,12 @@ def main():
         return
     
     elif args.subcommand == 'ai-status':
-        from ai.ollama_manager import OllamaManager
+        from ai.ai_manager import AIManager
         print("Checking AI assistant status...")
-        ollama = OllamaManager(config_manager)
-        status = ollama.get_status()
-        print(f"Ollama Status: {status['status']}")
+        ai_manager = AIManager(config_manager)
+        status = ai_manager.get_status()
+        print(f"AI Backend: {status.get('backend', 'unknown')}")
+        print(f"Status: {status['status']}")
         print(f"Model: {status.get('model', 'N/A')}")
         if args.keep_open:
             wait_for_user_input()
@@ -195,6 +232,7 @@ def main():
     elif args.subcommand == 'ai-signin':
         from ai.ollama_manager import OllamaManager
         print("Starting Ollama sign-in process...")
+        print("Note: This is only for Ollama backend")
         ollama = OllamaManager(config_manager)
         result = ollama.signin()
         if not result.get('success'):

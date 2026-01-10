@@ -1,4 +1,5 @@
 {
+  "backend": "ollama",
   "monitoring": {
     "enabled": false,
     "model": "starcoder:3b",
@@ -17,6 +18,12 @@
     "port": 11434,
     "auto_install": true,
     "auto_shutdown": true
+  },
+  "lmstudio": {
+    "host": "localhost",
+    "port": 1234,
+    "additional_ports": [1235, 1236],
+    "auto_restore_config": true
   },
   "privacy": {
     "localhost_only": true,

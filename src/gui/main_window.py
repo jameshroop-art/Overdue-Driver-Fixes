@@ -12,8 +12,9 @@ from PyQt6.QtGui import QIcon
 
 from core.hardware_detector import HardwareDetector
 from core.driver_manager import DriverManager
-from ai.ollama_manager import OllamaManager
+from ai.ai_manager import AIManager
 from gui.device_tab import DeviceTab
+from gui.ai_settings_widget import AISettingsWidget
 
 class MainWindow(QMainWindow):
     """Main application window"""
@@ -25,7 +26,9 @@ class MainWindow(QMainWindow):
         # Initialize managers
         self.hardware_detector = HardwareDetector(config_manager)
         self.driver_manager = DriverManager(config_manager)
-        self.ollama_manager = OllamaManager(config_manager)
+        
+        # Initialize AI manager - will use configured backend (Ollama or LLM Studio)
+        self.ai_manager = AIManager(config_manager)
         
         # Store detected hardware and device tabs
         self.detected_hardware = []
@@ -64,6 +67,7 @@ class MainWindow(QMainWindow):
         
         # Create tabs
         self.create_dashboard_tab()
+        self.create_ai_settings_tab()
         self.create_system_info_tab()
         
         # Status bar
@@ -125,6 +129,24 @@ class MainWindow(QMainWindow):
         layout.addLayout(button_layout)
         
         self.tabs.addTab(dashboard, "Dashboard")
+    
+    def create_ai_settings_tab(self):
+        """Create AI model selection and settings tab"""
+        self.ai_settings_widget = AISettingsWidget(self.config, self.ai_manager)
+        
+        # Connect signal to handle model changes
+        self.ai_settings_widget.modelChanged.connect(self.on_model_changed)
+        
+        self.tabs.addTab(self.ai_settings_widget, "AI Settings")
+    
+    def on_model_changed(self, model_name):
+        """Handle AI model change"""
+        self.statusBar.showMessage(f"AI Model changed to: {model_name}")
+        
+        # Update status label in system info tab if it exists
+        if hasattr(self, 'ai_status_label'):
+            backend = self.ai_manager.get_backend_name()
+            self.ai_status_label.setText(f"AI Assistant: {backend.upper()} - Model: {model_name}")
     
     def create_system_info_tab(self):
         """Create system information tab"""

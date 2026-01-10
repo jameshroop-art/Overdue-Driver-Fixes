@@ -1,0 +1,142 @@
+#!/bin/bash
+# Wrapper script for driver-mgt with LLM Studio backend and VM support
+# This script is designed to be launched with sudo/pkexec
+# It configures LLM Studio mode, VM bridge, and handles cleanup on exit
+
+set -e
+
+# Color codes for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo "=========================================="
+echo "driver-mgt - LLM Studio Mode with VM Bridge"
+echo "=========================================="
+echo ""
+
+# Check if we're running as root (via sudo/pkexec)
+if [ "$EUID" -ne 0 ]; then 
+    echo -e "${YELLOW}Warning: Not running with elevated privileges${NC}"
+    echo "Some operations may require sudo access"
+    echo ""
+fi
+
+# Get the actual user (not root if running with sudo)
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+    ACTUAL_HOME=$(getent passwd "$ACTUAL_USER" | cut -d: -f6)
+else
+    ACTUAL_USER="$USER"
+    ACTUAL_HOME="$HOME"
+fi
+
+echo "Running as user: $ACTUAL_USER"
+echo "Features: LLM Studio AI + Windows Driver VM Bridge"
+echo ""
+
+# Path to driver-mgt installation
+DRIVER_MGT_DIR="/opt/driver-mgt"
+DRIVER_MGT_BIN="$DRIVER_MGT_DIR/driver-mgt"
+
+# Check if driver-mgt is installed
+if [ ! -f "$DRIVER_MGT_BIN" ]; then
+    echo -e "${RED}Error: driver-mgt not found at $DRIVER_MGT_BIN${NC}"
+    echo "Please install driver-mgt first with: sudo bash install.sh"
+    echo ""
+    read -p "Press Enter to close..."
+    exit 1
+fi
+
+# Function to cleanup on exit
+cleanup() {
+    echo ""
+    echo "=========================================="
+    echo "Shutting down driver-mgt..."
+    echo "=========================================="
+    echo ""
+    echo -e "${BLUE}Cleaning up resources...${NC}"
+    
+    # The Python application handles cleanup in its shutdown method
+    # This includes:
+    # - Stopping VM if running
+    # - Restoring LLM Studio configuration
+    # - Re-enabling telemetry
+    
+    echo -e "${GREEN}✓ Cleanup complete${NC}"
+    echo ""
+}
+
+# Register cleanup function to run on exit
+trap cleanup EXIT
+
+# Set environment variables
+export DRIVER_MGT_AI_BACKEND="lmstudio"
+export DRIVER_MGT_ENABLE_VM="true"  # Enable VM bridge functionality
+export DRIVER_MGT_DISABLE_TELEMETRY="true"  # Disable LLM Studio telemetry
+
+# If running as root, we need to ensure the display is accessible
+if [ "$EUID" -eq 0 ] && [ -n "$DISPLAY" ]; then
+    # Allow root to access the X display
+    if [ -n "$XAUTHORITY" ]; then
+        export XAUTHORITY="$XAUTHORITY"
+    else
+        # Try to find the user's XAUTHORITY
+        if [ -f "$ACTUAL_HOME/.Xauthority" ]; then
+            export XAUTHORITY="$ACTUAL_HOME/.Xauthority"
+        fi
+    fi
+fi
+
+# Check if LLM Studio is running
+echo -e "${BLUE}Checking LLM Studio status...${NC}"
+if curl -s --connect-timeout 2 http://localhost:1234/v1/models >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ LLM Studio is running${NC}"
+else
+    echo -e "${YELLOW}⚠ LLM Studio is not running${NC}"
+    echo ""
+    echo "Please start LLM Studio before running driver-mgt"
+    echo "LLM Studio should be listening on http://localhost:1234"
+    echo ""
+    echo "Start LLM Studio, then run this launcher again."
+    echo ""
+    read -p "Press Enter to close..."
+    exit 1
+fi
+
+# Check VM support
+echo -e "${BLUE}Checking VM support...${NC}"
+if command -v qemu-system-x86_64 >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ QEMU installed - VM bridge available${NC}"
+    if [ -e /dev/kvm ]; then
+        echo -e "${GREEN}✓ KVM acceleration available${NC}"
+    else
+        echo -e "${YELLOW}⚠ KVM not available - VM will be slower${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ QEMU not installed - VM features disabled${NC}"
+    echo "  Install with: sudo apt-get install qemu-system-x86"
+    export DRIVER_MGT_ENABLE_VM="false"
+fi
+
+echo ""
+echo -e "${BLUE}Starting driver-mgt with:${NC}"
+echo "  - LLM Studio AI backend"
+echo "  - VM bridge for Windows drivers"
+echo "  - Telemetry disabled"
+echo ""
+
+# Run driver-mgt with LLM Studio backend and VM support
+cd "$DRIVER_MGT_DIR"
+
+if [ "$EUID" -eq 0 ] && [ -n "$ACTUAL_USER" ] && [ "$ACTUAL_USER" != "root" ]; then
+    # If running as root via sudo, preserve user environment
+    "$DRIVER_MGT_DIR/venv/bin/python" "$DRIVER_MGT_BIN" --gui
+else
+    # Normal execution
+    "$DRIVER_MGT_DIR/venv/bin/python" "$DRIVER_MGT_BIN" --gui
+fi
+
+# Cleanup will be called automatically via trap
