@@ -141,11 +141,15 @@ if [ "$PKG_MANAGER" = "apt" ]; then
         echo "Detected Debian 12 (Bookworm) - installing required packages..."
         apt-get install -y python3 python3-pip python3-venv python3-dev \
                            build-essential pciutils lshw dmidecode \
+                           libssl-dev libbz2-dev liblzma-dev libsqlite3-dev \
+                           libreadline-dev libgdbm-dev libffi-dev \
                            $OPENGL_PKG libxkbcommon-x11-0 libxcb-xinerama0 \
                            libxcb-cursor0 libegl1
     else
         # General Debian/Ubuntu packages
         apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode \
+                           libssl-dev libbz2-dev liblzma-dev libsqlite3-dev \
+                           libreadline-dev libgdbm-dev libffi-dev \
                            $OPENGL_PKG libxkbcommon-x11-0 libxcb-xinerama0 \
                            libxcb-cursor0 libegl1
     fi
@@ -156,9 +160,12 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     
 elif [ "$PKG_MANAGER" = "dnf" ]; then
     dnf install -y python3 python3-pip python3-devel gcc pciutils dmidecode \
+                   openssl-devel bzip2-devel xz-devel sqlite-devel \
+                   readline-devel gdbm-devel libffi-devel \
                    libxcb xcb-util-cursor libxkbcommon-x11 mesa-libEGL
 elif [ "$PKG_MANAGER" = "pacman" ]; then
     pacman -S --noconfirm python python-pip base-devel pciutils dmidecode \
+                          openssl bzip2 xz sqlite readline gdbm libffi \
                           libxcb xcb-util-cursor libxkbcommon-x11 libglvnd
 fi
 

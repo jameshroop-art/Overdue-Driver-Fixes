@@ -135,6 +135,45 @@ fi
 
 echo ""
 
+# Check Python build dependencies (needed for building C extensions and some venv scenarios)
+echo "Python Build Dependencies:"
+if ! check_library "libssl" "libssl\.so"; then
+    echo -e "${YELLOW}⚠ libssl-dev (recommended for SSL support)${NC}"
+    MISSING_LIBS=1
+fi
+
+if ! check_library "libbz2" "libbz2\.so"; then
+    echo -e "${YELLOW}⚠ libbz2-dev (recommended for bzip2 support)${NC}"
+    MISSING_LIBS=1
+fi
+
+if ! check_library "liblzma" "liblzma\.so"; then
+    echo -e "${YELLOW}⚠ liblzma-dev (recommended for LZMA support)${NC}"
+    MISSING_LIBS=1
+fi
+
+if ! check_library "libsqlite3" "libsqlite3\.so"; then
+    echo -e "${YELLOW}⚠ libsqlite3-dev (recommended for SQLite support)${NC}"
+    MISSING_LIBS=1
+fi
+
+if ! check_library "libreadline" "libreadline\.so"; then
+    echo -e "${YELLOW}⚠ libreadline-dev (recommended for readline support)${NC}"
+    MISSING_LIBS=1
+fi
+
+if ! check_library "libgdbm" "libgdbm\.so"; then
+    echo -e "${YELLOW}⚠ libgdbm-dev (recommended for GDBM support)${NC}"
+    MISSING_LIBS=1
+fi
+
+if ! check_library "libffi" "libffi\.so"; then
+    echo -e "${YELLOW}⚠ libffi-dev (recommended for FFI support)${NC}"
+    MISSING_LIBS=1
+fi
+
+echo ""
+
 # Provide recommendations if libraries are missing
 if [ $MISSING_LIBS -eq 1 ]; then
     echo "=========================================="
@@ -168,11 +207,15 @@ if [ $MISSING_LIBS -eq 1 ]; then
             if [ $IS_ROOT -eq 1 ]; then
                 echo "  apt-get update"
                 echo "  apt-get install -y python3-venv $OPENGL_PKG libegl1 \\"
-                echo "                     libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0"
+                echo "                     libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 \\"
+                echo "                     libssl-dev libbz2-dev liblzma-dev libsqlite3-dev \\"
+                echo "                     libreadline-dev libgdbm-dev libffi-dev"
             else
                 echo "  sudo apt-get update"
                 echo "  sudo apt-get install -y python3-venv $OPENGL_PKG libegl1 \\"
-                echo "                          libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0"
+                echo "                          libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 \\"
+                echo "                          libssl-dev libbz2-dev liblzma-dev libsqlite3-dev \\"
+                echo "                          libreadline-dev libgdbm-dev libffi-dev"
             fi
             ;;
         dnf)
@@ -180,10 +223,14 @@ if [ $MISSING_LIBS -eq 1 ]; then
             echo ""
             if [ $IS_ROOT -eq 1 ]; then
                 echo "  dnf install -y python3 mesa-libGL mesa-libEGL \\"
-                echo "                 libxcb xcb-util-cursor libxkbcommon-x11"
+                echo "                 libxcb xcb-util-cursor libxkbcommon-x11 \\"
+                echo "                 openssl-devel bzip2-devel xz-devel sqlite-devel \\"
+                echo "                 readline-devel gdbm-devel libffi-devel"
             else
                 echo "  sudo dnf install -y python3 mesa-libGL mesa-libEGL \\"
-                echo "                      libxcb xcb-util-cursor libxkbcommon-x11"
+                echo "                      libxcb xcb-util-cursor libxkbcommon-x11 \\"
+                echo "                      openssl-devel bzip2-devel xz-devel sqlite-devel \\"
+                echo "                      readline-devel gdbm-devel libffi-devel"
             fi
             ;;
         pacman)
@@ -191,15 +238,18 @@ if [ $MISSING_LIBS -eq 1 ]; then
             echo ""
             if [ $IS_ROOT -eq 1 ]; then
                 echo "  pacman -S --noconfirm python libglvnd libxcb \\"
-                echo "                        xcb-util-cursor libxkbcommon-x11"
+                echo "                        xcb-util-cursor libxkbcommon-x11 \\"
+                echo "                        openssl bzip2 xz sqlite readline gdbm libffi"
             else
                 echo "  sudo pacman -S --noconfirm python libglvnd libxcb \\"
-                echo "                             xcb-util-cursor libxkbcommon-x11"
+                echo "                             xcb-util-cursor libxkbcommon-x11 \\"
+                echo "                             openssl bzip2 xz sqlite readline gdbm libffi"
             fi
             ;;
         *)
             echo -e "${RED}Unknown package manager. Please install manually:${NC}"
             echo "  - Python 3 with venv support"
+            echo "  - Python build dependencies (OpenSSL, bzip2, LZMA, SQLite, readline, GDBM, libffi)"
             echo "  - OpenGL libraries (libGL, libEGL)"
             echo "  - Qt/X11 libraries (libxcb, xcb-util-cursor, libxkbcommon-x11)"
             ;;
