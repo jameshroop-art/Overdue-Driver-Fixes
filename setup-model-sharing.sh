@@ -247,8 +247,8 @@ setup_model_sharing() {
                 
                 local variant=$(basename "$variant_file")
                 
-                # Parse the manifest to get the blob hash
-                local blob_hash=$(grep -oP '"digest":\s*"sha256:\K[a-f0-9]+' "$variant_file" 2>/dev/null | head -1)
+                # Parse the manifest to get the blob hash (portable approach)
+                local blob_hash=$(grep '"digest":' "$variant_file" 2>/dev/null | head -1 | sed -n 's/.*"sha256:\([a-f0-9]*\)".*/\1/p')
                 
                 if [ -z "$blob_hash" ]; then
                     continue
