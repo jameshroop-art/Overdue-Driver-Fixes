@@ -486,3 +486,26 @@ class DriverManager:
         """Rollback to previous driver"""
         print(f"Would rollback driver for {hardware['name']}")
         return True
+    
+    def restore_driver(self, driver: Dict[str, Any], hardware: Dict[str, Any]) -> bool:
+        """Restore a driver from backup
+        
+        Args:
+            driver: Driver information from backup
+            hardware: Hardware information
+            
+        Returns:
+            True if restoration successful
+        """
+        print(f"Restoring driver: {driver.get('name')} for {hardware.get('name')}")
+        
+        # This would perform actual driver restoration
+        # For now, it's a placeholder that simulates restoration
+        driver_name = driver.get('name', 'unknown')
+        
+        if driver_name and driver_name != 'unknown':
+            print(f"✓ Driver {driver_name} restored successfully (simulated)")
+            return True
+        else:
+            print(f"✗ Cannot restore driver: invalid driver information")
+            return False

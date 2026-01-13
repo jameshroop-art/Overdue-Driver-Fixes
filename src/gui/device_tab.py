@@ -9,8 +9,9 @@ from PyQt6.QtWidgets import (
     QProgressBar, QComboBox, QMessageBox, QScrollArea,
     QProgressDialog, QCheckBox, QLineEdit, QSplitter, QTextBrowser
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor
+from datetime import datetime
 
 
 # Risk assessment thresholds
@@ -94,6 +95,14 @@ class DeviceTab(QWidget):
         # Initialize driver converter
         from ai.driver_converter import DriverConverter
         self.driver_converter = DriverConverter(config_manager, ai_manager)
+        
+        # Initialize backup manager and test timer
+        from utils.driver_backup import DriverBackupManager
+        from utils.driver_test_timer import DriverTestTimer
+        self.backup_manager = DriverBackupManager()
+        self.test_timer = DriverTestTimer(test_duration_minutes=5)
+        self.current_backup_path = None
+        self.pending_driver = None
         
         self.init_ui()
         self.load_drivers()
@@ -870,42 +879,97 @@ Estimated Recovery Time: 2-5 minutes"""
             self.ai_status_label.setStyleSheet("color: orange;")
     
     def install_driver(self, driver):
-        """Install a driver with AI assistance"""
+        """Install a driver with AI assistance and safety features"""
         # Check if driver is from a trusted source
         driver_source = driver.get('source', '').lower()
         is_trusted_source = driver_source in ['official', 'distribution']
         
+        # Step 1: Create system backup
+        current_driver = self.driver_manager.get_current_driver(self.hardware)
+        
+        backup_confirmation = QMessageBox.question(
+            self,
+            "⚠ Create System Backup",
+            f"Before installing {driver['name']}, create a backup?\n\n"
+            f"Current Driver: {current_driver.get('name', 'Unknown') if current_driver else 'None'}\n"
+            f"New Driver: {driver['name']} ({driver['version']})\n"
+            f"Source: {driver['source']}\n\n"
+            f"A backup will be saved to /root/driver-backups/\n"
+            f"This allows automatic rollback if installation fails.\n\n"
+            f"Create backup before proceeding?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if backup_confirmation == QMessageBox.StandardButton.Yes:
+            try:
+                self.current_backup_path = self.backup_manager.create_backup(
+                    self.hardware, 
+                    current_driver
+                )
+                QMessageBox.information(
+                    self,
+                    "✓ Backup Created",
+                    f"System backup created successfully:\n\n"
+                    f"{self.current_backup_path}\n\n"
+                    f"Backup includes:\n"
+                    f"• Hardware: {self.hardware.get('name')}\n"
+                    f"• Current Driver: {current_driver.get('name', 'Unknown') if current_driver else 'None'}\n"
+                    f"• Date/Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    f"This backup will be used for automatic rollback if needed."
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Backup Failed",
+                    f"Failed to create system backup:\n\n{str(e)}\n\n"
+                    f"Installation cannot proceed without backup for safety."
+                )
+                return
+        
+        # Step 2: Final confirmation with OK/Deny
         # Build installation message based on source trust
         if is_trusted_source:
             install_message = (
-                f"Install {driver['name']} ({driver['version']}) from {driver['source']}?\n\n"
-                f"✓ Trusted source - installation will proceed immediately\n\n"
-                f"AI-assisted installation will:\n"
+                f"⚠ FINAL CONFIRMATION - Install Driver?\n\n"
+                f"Driver: {driver['name']} ({driver['version']})\n"
+                f"Source: {driver['source']} (✓ Trusted)\n"
+                f"Hardware: {self.hardware.get('name')}\n\n"
+                f"{'Backup Created: ' + self.current_backup_path if self.current_backup_path else 'No Backup Created'}\n\n"
+                f"Installation Process:\n"
                 f"• Skip risk assessment (trusted source)\n"
                 f"• Monitor installation in real-time\n"
-                f"• Automatically correct errors\n"
-                f"• Test driver after installation\n"
-                f"• Create automatic backup for rollback"
+                f"• Test driver for 5 minutes\n"
+                f"• Automatic rollback if test fails or times out\n"
+                f"• You must confirm driver is working within 5 minutes\n\n"
+                f"Click OK to proceed or Deny to cancel."
             )
         else:
             install_message = (
-                f"Install {driver['name']} ({driver['version']}) from {driver['source']}?\n\n"
-                f"AI-assisted installation will:\n"
+                f"⚠ FINAL CONFIRMATION - Install Driver?\n\n"
+                f"Driver: {driver['name']} ({driver['version']})\n"
+                f"Source: {driver['source']}\n"
+                f"Hardware: {self.hardware.get('name')}\n\n"
+                f"{'Backup Created: ' + self.current_backup_path if self.current_backup_path else 'No Backup Created'}\n\n"
+                f"Installation Process:\n"
                 f"• Assess risks before installation\n"
                 f"• Monitor installation in real-time\n"
-                f"• Automatically correct errors\n"
-                f"• Test driver after installation\n"
-                f"• Create automatic backup for rollback"
+                f"• Test driver for 5 minutes\n"
+                f"• Automatic rollback if test fails or times out\n"
+                f"• You must confirm driver is working within 5 minutes\n\n"
+                f"Click OK to proceed or Deny to cancel."
             )
         
         reply = QMessageBox.question(
             self,
-            "Confirm Installation",
+            "Confirm Installation - OK or Deny",
             install_message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.StandardButton.Ok:
+            # Store pending driver for timer
+            self.pending_driver = driver
+            
             # Create and start worker thread
             self.install_worker = DriverInstallWorker(
                 self.driver_manager,
@@ -926,11 +990,18 @@ Estimated Recovery Time: 2-5 minutes"""
             
             # Connect signals
             self.install_worker.progress.connect(self.update_install_progress)
-            self.install_worker.finished.connect(self.install_finished)
+            self.install_worker.finished.connect(self.install_finished_with_timer)
             
             # Start installation
             self.install_worker.start()
             self.progress_dialog.show()
+        else:
+            QMessageBox.information(
+                self,
+                "Installation Cancelled",
+                f"Driver installation cancelled by user.\n\n"
+                f"{'Backup will be retained for future use.' if self.current_backup_path else ''}"
+            )
     
     def update_install_progress(self, value, message):
         """Update installation progress"""
@@ -947,6 +1018,227 @@ Estimated Recovery Time: 2-5 minutes"""
             self.assess_risk()
         else:
             QMessageBox.critical(self, "Error", message)
+    
+    def install_finished_with_timer(self, success, message):
+        """Handle installation completion and start 5-minute test timer"""
+        self.progress_dialog.close()
+        
+        if success:
+            # Start 5-minute test timer
+            QMessageBox.information(
+                self,
+                "✓ Installation Complete - Test Period Started",
+                f"{message}\n\n"
+                f"⏱ 5-MINUTE TEST PERIOD STARTED\n\n"
+                f"The driver has been installed successfully.\n"
+                f"You now have 5 minutes to test the driver.\n\n"
+                f"What to test:\n"
+                f"• Basic hardware functionality\n"
+                f"• System stability\n"
+                f"• Performance\n"
+                f"• Any hardware-specific features\n\n"
+                f"⚠ IMPORTANT:\n"
+                f"• You MUST click 'Confirm Driver Works' within 5 minutes\n"
+                f"• If you don't confirm, the driver will be automatically reverted\n"
+                f"• If you experience issues, click 'Revert Driver Now'\n\n"
+                f"A test dialog will appear to track your testing."
+            )
+            
+            # Start test timer
+            self.test_timer.start_test_timer(
+                driver=self.pending_driver,
+                hardware=self.hardware,
+                on_timeout=self.on_test_timeout,
+                on_progress=self.on_test_progress
+            )
+            
+            # Show test confirmation dialog
+            self.show_test_timer_dialog()
+        else:
+            # Installation failed - offer to restore backup
+            if self.current_backup_path:
+                restore_reply = QMessageBox.question(
+                    self,
+                    "Installation Failed",
+                    f"{message}\n\n"
+                    f"Restore from backup?\n\n"
+                    f"Backup: {self.current_backup_path}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if restore_reply == QMessageBox.StandardButton.Yes:
+                    self.restore_from_backup()
+            else:
+                QMessageBox.critical(self, "Installation Failed", message)
+    
+    def show_test_timer_dialog(self):
+        """Show dialog for test timer with confirm/revert buttons"""
+        self.timer_dialog = QMessageBox(self)
+        self.timer_dialog.setWindowTitle("Driver Test Period - 5 Minutes")
+        self.timer_dialog.setIcon(QMessageBox.Icon.Information)
+        
+        # Add custom buttons
+        confirm_btn = self.timer_dialog.addButton("✓ Confirm Driver Works", QMessageBox.ButtonRole.AcceptRole)
+        revert_btn = self.timer_dialog.addButton("✗ Revert Driver Now", QMessageBox.ButtonRole.RejectRole)
+        
+        # Create timer to update message
+        self.timer_update_timer = QTimer(self)
+        self.timer_update_timer.timeout.connect(self.update_timer_dialog_message)
+        self.timer_update_timer.start(1000)  # Update every second
+        
+        # Initial message
+        self.update_timer_dialog_message()
+        
+        # Show dialog and wait for response
+        self.timer_dialog.exec()
+        
+        # Stop update timer
+        self.timer_update_timer.stop()
+        
+        # Check which button was clicked
+        clicked_button = self.timer_dialog.clickedButton()
+        
+        if clicked_button == confirm_btn:
+            self.confirm_driver_works()
+        elif clicked_button == revert_btn:
+            self.revert_driver_now()
+    
+    def update_timer_dialog_message(self):
+        """Update the timer dialog message with remaining time"""
+        if not self.test_timer.is_test_active():
+            if hasattr(self, 'timer_dialog'):
+                self.timer_dialog.close()
+            return
+        
+        minutes, seconds = self.test_timer.get_remaining_time()
+        elapsed_min, elapsed_sec = self.test_timer.get_elapsed_time()
+        
+        message = (
+            f"⏱ DRIVER TEST PERIOD\n\n"
+            f"Testing: {self.pending_driver.get('name', 'Unknown')} ({self.pending_driver.get('version', 'Unknown')})\n"
+            f"Hardware: {self.hardware.get('name', 'Unknown')}\n\n"
+            f"Time Elapsed: {elapsed_min}m {elapsed_sec}s\n"
+            f"Time Remaining: {minutes}m {seconds}s\n\n"
+            f"Please test the following:\n"
+            f"✓ Basic hardware functionality\n"
+            f"✓ System stability\n"
+            f"✓ Performance\n"
+            f"✓ Hardware-specific features\n\n"
+            f"⚠ If timer expires without confirmation,\n"
+            f"   the driver will be automatically reverted!"
+        )
+        
+        if hasattr(self, 'timer_dialog'):
+            self.timer_dialog.setText(message)
+    
+    def confirm_driver_works(self):
+        """User confirms driver is working correctly"""
+        if self.test_timer.confirm_test_passed():
+            QMessageBox.information(
+                self,
+                "✓ Driver Confirmed",
+                f"Driver {self.pending_driver.get('name')} confirmed as working!\n\n"
+                f"The driver installation is complete and verified.\n"
+                f"Backup has been retained in case you need to revert later.\n\n"
+                f"Backup location: {self.current_backup_path if self.current_backup_path else 'N/A'}"
+            )
+            
+            # Refresh driver info
+            self.assess_risk()
+        else:
+            QMessageBox.warning(
+                self,
+                "No Active Test",
+                "There is no active driver test to confirm."
+            )
+    
+    def revert_driver_now(self):
+        """User requests immediate driver revert"""
+        reply = QMessageBox.question(
+            self,
+            "⚠ Confirm Driver Revert",
+            f"Revert to previous driver configuration?\n\n"
+            f"This will restore the backup from:\n"
+            f"{self.current_backup_path if self.current_backup_path else 'Unknown'}\n\n"
+            f"Are you sure you want to revert?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.test_timer.cancel_test()
+            self.restore_from_backup()
+    
+    def on_test_timeout(self, driver, hardware):
+        """Called when test timer expires without confirmation"""
+        print(f"⏰ Test timer expired for {driver.get('name')}")
+        
+        # Close timer dialog if open
+        if hasattr(self, 'timer_dialog'):
+            self.timer_dialog.close()
+        
+        # Show timeout message
+        QMessageBox.warning(
+            self,
+            "⏰ Test Period Expired",
+            f"The 5-minute test period has expired without confirmation.\n\n"
+            f"Driver: {driver.get('name')}\n"
+            f"Hardware: {hardware.get('name')}\n\n"
+            f"The driver will now be reverted to the previous configuration\n"
+            f"for safety reasons.\n\n"
+            f"You can try installing the driver again and confirm it works\n"
+            f"within the 5-minute test period."
+        )
+        
+        # Restore from backup
+        self.restore_from_backup()
+    
+    def on_test_progress(self, elapsed_seconds, remaining_seconds):
+        """Called periodically during test period"""
+        # This is called every 10 seconds - could be used for logging
+        pass
+    
+    def restore_from_backup(self):
+        """Restore driver from backup"""
+        if not self.current_backup_path:
+            QMessageBox.critical(
+                self,
+                "No Backup Available",
+                "Cannot restore: No backup file available."
+            )
+            return
+        
+        try:
+            success = self.backup_manager.restore_from_backup(
+                self.current_backup_path,
+                self.driver_manager
+            )
+            
+            if success:
+                QMessageBox.information(
+                    self,
+                    "✓ Driver Restored",
+                    f"Driver successfully restored from backup!\n\n"
+                    f"Backup: {self.current_backup_path}\n\n"
+                    f"Your system has been restored to the previous\n"
+                    f"driver configuration."
+                )
+                
+                # Refresh driver info
+                self.assess_risk()
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Restore Failed",
+                    f"Failed to restore driver from backup.\n\n"
+                    f"Backup: {self.current_backup_path}\n\n"
+                    f"You may need to manually revert the driver."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Restore Error",
+                f"Error restoring from backup:\n\n{str(e)}"
+            )
     
     def download_driver(self, driver):
         """Download a cross-OS driver for analysis"""
