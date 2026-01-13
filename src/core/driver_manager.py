@@ -263,13 +263,6 @@ class DriverManager:
         return drivers
     
     def _find_amd_drivers(self, include_cross_os: bool = False) -> List[Dict[str, Any]]:
-        """Find available AMD drivers"""
-        drivers = []
-        
-        # Check connectivity to AMD sources
-        amd_sources = self.connect_to_driver_sources('AMD')
-        
-    def _find_amd_drivers(self, include_cross_os: bool = False) -> List[Dict[str, Any]]:
         """Find available AMD drivers
         
         Args:

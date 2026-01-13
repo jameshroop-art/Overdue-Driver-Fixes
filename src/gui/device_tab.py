@@ -517,10 +517,11 @@ class DeviceTab(QWidget):
         
         # Drivers table (now with OS column)
         self.drivers_table = QTableWidget()
-        self.drivers_table.setColumnCount(8)
-        self.drivers_table.setHorizontalHeaderLabels([
+        header_labels = [
             "Driver", "Version", "Source", "Target OS", "Stability", "Risk %", "Source Status", "Actions"
-        ])
+        ]
+        self.drivers_table.setColumnCount(len(header_labels))
+        self.drivers_table.setHorizontalHeaderLabels(header_labels)
         self.drivers_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.drivers_table)
         
