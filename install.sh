@@ -112,9 +112,12 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     # Ubuntu 24.04+ and newer Debian versions replaced libgl1-mesa-glx with libgl1
     OPENGL_PKG="libgl1-mesa-glx"
     
-    # Check if libgl1-mesa-glx is available
-    if ! apt-cache show libgl1-mesa-glx >/dev/null 2>&1; then
-        echo "Note: libgl1-mesa-glx not available, using libgl1 instead"
+    # Check if libgl1-mesa-glx is actually installable (not just a virtual package)
+    if apt-cache show libgl1-mesa-glx 2>&1 | grep -q "^Package: libgl1-mesa-glx"; then
+        echo "Using libgl1-mesa-glx for OpenGL support"
+    else
+        echo "Note: libgl1-mesa-glx not available (obsolete in Ubuntu 24.04+)"
+        echo "Using libgl1 instead"
         OPENGL_PKG="libgl1"
     fi
     

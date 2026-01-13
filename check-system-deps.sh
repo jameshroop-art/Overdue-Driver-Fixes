@@ -142,7 +142,8 @@ if [ $MISSING_LIBS -eq 1 ]; then
             echo ""
             
             # Determine OpenGL package
-            if apt-cache show libgl1-mesa-glx &>/dev/null 2>&1; then
+            # Check if libgl1-mesa-glx is actually installable (not just virtual)
+            if apt-cache show libgl1-mesa-glx 2>&1 | grep -q "^Package: libgl1-mesa-glx"; then
                 OPENGL_PKG="libgl1-mesa-glx"
             else
                 # Ubuntu 24.04+ and newer systems use libgl1 instead
