@@ -3,7 +3,7 @@
 ## Overview
 This implementation fixes the `libgl1-mesa-glx` package availability issue in Ubuntu 24.04+ and implements automatic virtual environment activation for the driver-mgt application. It also includes Python build dependencies to prevent SSL and module compilation errors.
 
-## Recent Update: Python Build Dependencies (2024)
+## Recent Update: Python Build Dependencies
 **Problem:** When Python venv is created or when Python extensions are compiled, missing build dependencies can cause errors like:
 - "Could not build the ssl module!"
 - "Python requires OpenSSL 1.1.1 or newer"

@@ -138,37 +138,37 @@ echo ""
 # Check Python build dependencies (needed for building C extensions and some venv scenarios)
 echo "Python Build Dependencies:"
 if ! check_library "libssl" "libssl\.so"; then
-    echo -e "${YELLOW}⚠ libssl-dev (recommended for SSL support)${NC}"
+    echo -e "${YELLOW}⚠ OpenSSL development libraries (libssl-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
 if ! check_library "libbz2" "libbz2\.so"; then
-    echo -e "${YELLOW}⚠ libbz2-dev (recommended for bzip2 support)${NC}"
+    echo -e "${YELLOW}⚠ bzip2 development libraries (libbz2-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
 if ! check_library "liblzma" "liblzma\.so"; then
-    echo -e "${YELLOW}⚠ liblzma-dev (recommended for LZMA support)${NC}"
+    echo -e "${YELLOW}⚠ LZMA development libraries (liblzma-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
 if ! check_library "libsqlite3" "libsqlite3\.so"; then
-    echo -e "${YELLOW}⚠ libsqlite3-dev (recommended for SQLite support)${NC}"
+    echo -e "${YELLOW}⚠ SQLite development libraries (libsqlite3-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
 if ! check_library "libreadline" "libreadline\.so"; then
-    echo -e "${YELLOW}⚠ libreadline-dev (recommended for readline support)${NC}"
+    echo -e "${YELLOW}⚠ readline development libraries (libreadline-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
 if ! check_library "libgdbm" "libgdbm\.so"; then
-    echo -e "${YELLOW}⚠ libgdbm-dev (recommended for GDBM support)${NC}"
+    echo -e "${YELLOW}⚠ GDBM development libraries (libgdbm-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
 if ! check_library "libffi" "libffi\.so"; then
-    echo -e "${YELLOW}⚠ libffi-dev (recommended for FFI support)${NC}"
+    echo -e "${YELLOW}⚠ FFI development libraries (libffi-dev package)${NC}"
     MISSING_LIBS=1
 fi
 
