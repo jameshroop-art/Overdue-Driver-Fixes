@@ -32,6 +32,7 @@ class OllamaManager:
         self.backend_manager = None
         self.ollama_port = 11434
         self.lmstudio_port = 1234
+        self.backend_process = None  # Track started backend processes
         
         # Detect and initialize available backend
         self._detect_and_initialize_backend()
@@ -88,7 +89,7 @@ class OllamaManager:
         try:
             response = requests.get(f'http://localhost:{port}/api/tags', timeout=2)
             return response.status_code == 200
-        except:
+        except (requests.RequestException, OSError):
             return False
     
     def _check_lmstudio_available(self) -> bool:
@@ -96,7 +97,7 @@ class OllamaManager:
         try:
             response = requests.get(f'http://localhost:{self.lmstudio_port}/v1/models', timeout=2)
             return response.status_code == 200
-        except:
+        except (requests.RequestException, OSError):
             return False
     
     def _try_start_ollama(self) -> bool:
@@ -121,14 +122,17 @@ class OllamaManager:
             # Try starting manually as fallback
             env = os.environ.copy()
             env['OLLAMA_HOST'] = f'127.0.0.1:{self.ollama_port}'
-            subprocess.Popen(['ollama', 'serve'], 
-                           env=env,
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            self.backend_process = subprocess.Popen(
+                ['ollama', 'serve'], 
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
             time.sleep(3)
             
             return self._check_ollama_available()
-        except:
+        except Exception as e:
+            print(f"Failed to start Ollama: {e}")
             return False
     
     def _try_start_lmstudio(self) -> bool:
@@ -142,15 +146,17 @@ class OllamaManager:
             if lmstudio_bin.exists():
                 try:
                     print("Starting LM Studio server...")
-                    subprocess.Popen([str(lmstudio_bin), 'server', 'start', '--port', str(self.lmstudio_port)],
-                                   stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.DEVNULL)
+                    self.backend_process = subprocess.Popen(
+                        [str(lmstudio_bin), 'server', 'start', '--port', str(self.lmstudio_port)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
                     time.sleep(3)
                     
                     if self._check_lmstudio_available():
                         return True
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Failed to start LM Studio: {e}")
         
         return False
     
@@ -417,13 +423,26 @@ Provide monitoring information:
         # Don't stop system-wide Ollama service, but cleanup any alternate port instances
         if self.backend == 'ollama' and self.ollama_port != 11434:
             self._stop_ollama_alternate_port()
+        
+        # Terminate backend process if we started it
+        if self.backend_process:
+            try:
+                self.backend_process.terminate()
+                self.backend_process.wait(timeout=5)
+            except Exception:
+                try:
+                    self.backend_process.kill()
+                except Exception:
+                    pass
+            finally:
+                self.backend_process = None
     
     def _stop_lmstudio_session(self):
         """Stop LM Studio server session"""
         try:
             # Try to stop via API if available
             requests.post('http://localhost:1234/server/stop', timeout=2)
-        except:
+        except (requests.RequestException, OSError):
             pass
         
         # Kill any LM Studio server processes we started
@@ -433,9 +452,9 @@ Provide monitoring information:
                 try:
                     if proc.info['name'] and 'lmstudio' in proc.info['name'].lower():
                         proc.terminate()
-                except:
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
-        except:
+        except ImportError:
             pass
     
     def _stop_ollama_alternate_port(self):
@@ -450,7 +469,7 @@ Provide monitoring information:
                 os.kill(pid, signal.SIGTERM)
                 pid_file.unlink()
                 print(f"✓ Stopped Ollama on alternate port {self.ollama_port}")
-        except:
+        except (OSError, ValueError, FileNotFoundError):
             pass
     
     def ensure_backend_running(self) -> bool:
