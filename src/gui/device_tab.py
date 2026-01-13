@@ -25,10 +25,10 @@ class DriverInstallWorker(QThread):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal(bool, str)
     
-    def __init__(self, driver_manager, ollama_manager, hardware, driver):
+    def __init__(self, driver_manager, ai_manager, hardware, driver):
         super().__init__()
         self.driver_manager = driver_manager
-        self.ollama_manager = ollama_manager
+        self.ai_manager = ai_manager
         self.hardware = hardware
         self.driver = driver
     
@@ -39,7 +39,7 @@ class DriverInstallWorker(QThread):
             
             # Pre-installation risk assessment
             self.progress.emit(20, "Assessing risks...")
-            risk = self.ollama_manager.assess_risk(self.hardware, self.driver)
+            risk = self.ai_manager.assess_risk(self.hardware, self.driver)
             
             if risk['risk_percentage'] > RISK_HIGH_THRESHOLD:
                 self.progress.emit(25, f"High risk detected: {risk['risk_percentage']}%")
@@ -68,11 +68,11 @@ class DriverInstallWorker(QThread):
 class DeviceTab(QWidget):
     """Tab widget for individual device management"""
     
-    def __init__(self, hardware, driver_manager, ollama_manager, config_manager):
+    def __init__(self, hardware, driver_manager, ai_manager, config_manager):
         super().__init__()
         self.hardware = hardware
         self.driver_manager = driver_manager
-        self.ollama_manager = ollama_manager
+        self.ai_manager = ai_manager
         self.config = config_manager
         self.available_drivers = []
         self.install_worker = None
@@ -744,7 +744,7 @@ Estimated Recovery Time: 2-5 minutes"""
             
             if current_driver:
                 # Mock risk assessment - would use AI in production
-                risk = self.ollama_manager.assess_risk(self.hardware, current_driver)
+                risk = self.ai_manager.assess_risk(self.hardware, current_driver)
                 risk_percentage = risk.get('risk_percentage', 5)
                 can_remediate = risk.get('can_remediate', True)
                 
@@ -783,7 +783,7 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def check_ai_status(self):
         """Check AI assistant status"""
-        status = self.ollama_manager.get_status()
+        status = self.ai_manager.get_status()
         
         if status['status'] == 'running':
             self.ai_status_label.setText(f"AI Status: Online ({status.get('model', 'starcoder:3b')})")
@@ -811,7 +811,7 @@ Estimated Recovery Time: 2-5 minutes"""
             # Create and start worker thread
             self.install_worker = DriverInstallWorker(
                 self.driver_manager,
-                self.ollama_manager,
+                self.ai_manager,
                 self.hardware,
                 driver
             )
@@ -891,7 +891,7 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def toggle_ai_monitoring(self):
         """Toggle AI monitoring"""
-        result = self.ollama_manager.monitor_driver(self.hardware)
+        result = self.ai_manager.monitor_driver(self.hardware)
         
         if result.get('monitoring'):
             QMessageBox.information(
@@ -914,7 +914,7 @@ Estimated Recovery Time: 2-5 minutes"""
         
         if self.ai_monitoring_enabled:
             # Enable monitoring
-            result = self.ollama_manager.monitor_driver(self.hardware)
+            result = self.ai_manager.monitor_driver(self.hardware)
             self.ai_status_label.setText(f"AI Status: Monitoring {device_name}")
             self.ai_status_label.setStyleSheet("color: lightgreen; font-weight: bold;")
             
@@ -1050,7 +1050,7 @@ Estimated Recovery Time: 2-5 minutes"""
         
         if self.chat_enabled:
             # Check if AI is available
-            status = self.ollama_manager.get_status()
+            status = self.ai_manager.get_status()
             if status['status'] != 'running':
                 QMessageBox.warning(
                     self,
@@ -1065,7 +1065,7 @@ Estimated Recovery Time: 2-5 minutes"""
                 return
             
             # Check if model is installed
-            model_name = self.ollama_manager.model
+            model_name = self.ai_manager.model
             if status.get('model') == 'not_installed':
                 QMessageBox.warning(
                     self,
@@ -1119,7 +1119,7 @@ Estimated Recovery Time: 2-5 minutes"""
         self.chat_display.repaint()
         
         # Get AI response
-        result = self.ollama_manager.analyze_text(prompt)
+        result = self.ai_manager.analyze_text(prompt)
         
         # Remove thinking indicator by replacing with empty string
         html = self.chat_display.toHtml()
@@ -1171,7 +1171,7 @@ Estimated Recovery Time: 2-5 minutes"""
             self.chat_display.repaint()
             
             # Perform sign-in (this will open a browser)
-            result = self.ollama_manager.signin()
+            result = self.ai_manager.signin()
             
             if result.get('success'):
                 QMessageBox.information(

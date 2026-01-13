@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
             device_tab = DeviceTab(
                 hardware,
                 self.driver_manager,
-                self.ollama_manager,
+                self.ai_manager,
                 self.config
             )
             
@@ -265,7 +265,7 @@ class MainWindow(QMainWindow):
     
     def check_ai_status(self):
         """Check AI assistant status"""
-        status = self.ollama_manager.get_status()
+        status = self.ai_manager.get_status()
         
         if status['status'] == 'running':
             self.ai_status_label.setText(f"AI Assistant: Running ({status.get('model', 'N/A')})")
