@@ -181,12 +181,29 @@ fi
 if [ "$USE_EXISTING_VENV" = true ]; then
     echo ""
     echo "⚠ Using your current virtual environment"
-    echo "  Skipping venv creation"
+    echo "  Virtual environment: $VIRTUAL_ENV"
+    echo "  Skipping venv creation and activation"
     VENV_PYTHON="python3"
+    VENV_PIP="pip3"
 elif [ "$REUSE_VENV" = true ]; then
     echo ""
     echo "✓ Reusing existing virtual environment"
-    VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
+    echo "  Activating venv..."
+    
+    # Activate the existing venv
+    cd "$INSTALL_DIR"
+    source venv/bin/activate
+    
+    if [ -z "$VIRTUAL_ENV" ]; then
+        echo "⚠ Warning: venv activation may have failed"
+        echo "  Using direct path to venv executables"
+        VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
+        VENV_PIP="$INSTALL_DIR/venv/bin/pip"
+    else
+        echo "✓ Virtual environment activated: $VIRTUAL_ENV"
+        VENV_PYTHON="python"
+        VENV_PIP="pip"
+    fi
 else
     echo ""
     echo "Creating new virtual environment..."
@@ -204,12 +221,26 @@ else
     fi
     
     echo "✓ Virtual environment created successfully"
-    VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
+    
+    # Activate the new venv
+    echo "  Activating venv..."
+    source venv/bin/activate
+    
+    if [ -z "$VIRTUAL_ENV" ]; then
+        echo "⚠ Warning: venv activation may have failed"
+        echo "  Using direct path to venv executables"
+        VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
+        VENV_PIP="$INSTALL_DIR/venv/bin/pip"
+    else
+        echo "✓ Virtual environment activated: $VIRTUAL_ENV"
+        VENV_PYTHON="python"
+        VENV_PIP="pip"
+    fi
     
     # Upgrade pip
     echo ""
     echo "Upgrading pip..."
-    "$INSTALL_DIR/venv/bin/pip" install --upgrade pip -q
+    $VENV_PIP install --upgrade pip -q
 fi
 
 # Create requirements.txt
@@ -237,6 +268,14 @@ cat > "$INSTALL_DIR/requirements.txt" << 'EOF'
 EOF
 
 echo "✓ Requirements file created"
+
+# Install any optional dependencies if in venv
+if [ "$USE_EXISTING_VENV" = false ] && [ -n "$VIRTUAL_ENV" ]; then
+    echo ""
+    echo "Checking for optional dependencies..."
+    # No required external dependencies for core functionality
+    echo "✓ No additional packages needed (using Python built-ins)"
+fi
 
 echo ""
 echo "Setting up Python path..."
@@ -396,8 +435,13 @@ echo ""
 echo "Installation directory: $INSTALL_DIR"
 if [ "$USE_EXISTING_VENV" = true ]; then
     echo "Using: Your current virtual environment"
+    echo "  Virtual environment: $VIRTUAL_ENV"
+elif [ -n "$VIRTUAL_ENV" ]; then
+    echo "Virtual environment: $VIRTUAL_ENV (ACTIVATED)"
+    echo "  Note: Venv is currently active in this shell"
 else
     echo "Virtual environment: $INSTALL_DIR/venv"
+    echo "  Note: Venv was activated during installation"
 fi
 echo ""
 echo "Usage:"
@@ -408,6 +452,9 @@ echo "  decoder-cli export --format json"
 echo "  decoder-cli stats"
 echo ""
 if [ "$USE_EXISTING_VENV" = false ]; then
+    echo "To activate the venv in a new shell:"
+    echo "  source $INSTALL_DIR/venv/bin/activate"
+    echo ""
     echo "Or use Python directly:"
     echo "  $INSTALL_DIR/venv/bin/python"
     echo "  >>> import sys"
@@ -425,6 +472,13 @@ echo ""
 if [ "$REUSE_VENV" = true ]; then
     echo "Note: Reused existing virtual environment"
     echo "  To reinstall with a fresh venv, remove $INSTALL_DIR and run again"
+    echo ""
+fi
+if [ -n "$VIRTUAL_ENV" ]; then
+    echo "Current Status:"
+    echo "  ✓ Virtual environment is active in this shell"
+    echo "  Python: $(which python)"
+    echo "  Pip: $(which pip)"
     echo ""
 fi
 
