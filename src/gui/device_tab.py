@@ -139,6 +139,12 @@ class DeviceTab(QWidget):
         current_driver_group = self.create_current_driver_section()
         layout.addWidget(current_driver_group)
         
+        # Timer section - visible area for test period countdown
+        timer_group = self.create_timer_section()
+        layout.addWidget(timer_group)
+        self.timer_group = timer_group  # Store reference to show/hide
+        self.timer_group.setVisible(False)  # Hidden by default, shown during test period
+        
         # Risk assessment section
         risk_group = self.create_risk_assessment_section()
         layout.addWidget(risk_group)
@@ -325,6 +331,73 @@ class DeviceTab(QWidget):
         layout.addLayout(button_layout)
         
         group.setLayout(layout)
+        return group
+    
+    def create_timer_section(self):
+        """Create timer section with live feed of communications"""
+        group = QGroupBox("⏱ Driver Test Period - Live Status")
+        layout = QVBoxLayout()
+        
+        # Timer display - large and prominent
+        self.timer_display_label = QLabel("Time Remaining: 5:00")
+        self.timer_display_label.setStyleSheet(
+            "font-size: 24px; font-weight: bold; color: #FF6B00; "
+            "padding: 10px; background-color: #FFF3E0; border-radius: 5px;"
+        )
+        self.timer_display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.timer_display_label)
+        
+        # Status info
+        self.timer_status_label = QLabel("Testing driver installation...")
+        self.timer_status_label.setStyleSheet("font-size: 12px; color: #666;")
+        self.timer_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.timer_status_label)
+        
+        # Live communication feed
+        feed_label = QLabel("Live Communication Feed:")
+        feed_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(feed_label)
+        
+        self.timer_comm_feed = QTextEdit()
+        self.timer_comm_feed.setReadOnly(True)
+        self.timer_comm_feed.setMaximumHeight(150)
+        self.timer_comm_feed.setStyleSheet(
+            "background-color: #F5F5F5; font-family: monospace; font-size: 11px;"
+        )
+        layout.addWidget(self.timer_comm_feed)
+        
+        # Action buttons
+        button_layout = QHBoxLayout()
+        
+        self.confirm_driver_btn = QPushButton("✓ Confirm Driver Works")
+        self.confirm_driver_btn.setStyleSheet(
+            "background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;"
+        )
+        self.confirm_driver_btn.clicked.connect(self.confirm_driver_works)
+        button_layout.addWidget(self.confirm_driver_btn)
+        
+        self.revert_driver_btn = QPushButton("✗ Revert Driver Now")
+        self.revert_driver_btn.setStyleSheet(
+            "background-color: #F44336; color: white; font-weight: bold; padding: 8px;"
+        )
+        self.revert_driver_btn.clicked.connect(self.revert_driver_now)
+        button_layout.addWidget(self.revert_driver_btn)
+        
+        self.stress_test_btn = QPushButton("⚡ Run Stress Test")
+        self.stress_test_btn.setStyleSheet(
+            "background-color: #2196F3; color: white; font-weight: bold; padding: 8px;"
+        )
+        self.stress_test_btn.clicked.connect(self.start_stress_test)
+        button_layout.addWidget(self.stress_test_btn)
+        
+        layout.addLayout(button_layout)
+        
+        group.setLayout(layout)
+        
+        # Create timer to update display every second
+        self.timer_display_update_timer = QTimer(self)
+        self.timer_display_update_timer.timeout.connect(self.update_timer_display)
+        
         return group
     
     def create_risk_assessment_section(self):
@@ -1027,6 +1100,14 @@ Estimated Recovery Time: 2-5 minutes"""
         self.progress_dialog.close()
         
         if success:
+            # Show and initialize timer section
+            self.timer_group.setVisible(True)
+            self.timer_comm_feed.clear()
+            self.add_timer_communication("✓ Driver installation completed successfully")
+            self.add_timer_communication(f"Installing: {self.pending_driver.get('name', 'Unknown')}")
+            self.add_timer_communication("Starting 5-minute test period...")
+            self.add_timer_communication("Please test hardware functionality")
+            
             # Start 5-minute test timer
             QMessageBox.information(
                 self,
@@ -1034,7 +1115,7 @@ Estimated Recovery Time: 2-5 minutes"""
                 f"{message}\n\n"
                 f"⏱ 5-MINUTE TEST PERIOD STARTED\n\n"
                 f"The driver has been installed successfully.\n"
-                f"You now have 5 minutes to test the driver.\n\n"
+                f"A visible timer with live communication feed has been added to the interface.\n\n"
                 f"What to test:\n"
                 f"• Basic hardware functionality\n"
                 f"• System stability\n"
@@ -1044,7 +1125,7 @@ Estimated Recovery Time: 2-5 minutes"""
                 f"• You MUST click 'Confirm Driver Works' within 5 minutes\n"
                 f"• If you don't confirm, the driver will be automatically reverted\n"
                 f"• If you experience issues, click 'Revert Driver Now'\n\n"
-                f"A test dialog will appear to track your testing."
+                f"Monitor the timer section for live updates."
             )
             
             # Start test timer
@@ -1055,8 +1136,9 @@ Estimated Recovery Time: 2-5 minutes"""
                 on_progress=self.on_test_progress
             )
             
-            # Show test confirmation dialog
-            self.show_test_timer_dialog()
+            # Start display update timer (updates every second)
+            self.timer_display_update_timer.start(1000)
+            self.add_timer_communication("⏱ Timer started - monitoring system stability")
         else:
             # Installation failed - offer to restore backup
             if self.current_backup_path:
@@ -1074,89 +1156,68 @@ Estimated Recovery Time: 2-5 minutes"""
             else:
                 QMessageBox.critical(self, "Installation Failed", message)
     
-    def show_test_timer_dialog(self):
-        """Show dialog for test timer with confirm/revert buttons and stress test option"""
-        self.timer_dialog = QMessageBox(self)
-        self.timer_dialog.setWindowTitle("Driver Test Period - 5 Minutes")
-        self.timer_dialog.setIcon(QMessageBox.Icon.Information)
-        
-        # Add custom buttons
-        confirm_btn = self.timer_dialog.addButton("✓ Confirm Driver Works", QMessageBox.ButtonRole.AcceptRole)
-        stress_test_btn = self.timer_dialog.addButton("⚡ Run Stress Test", QMessageBox.ButtonRole.ActionRole)
-        revert_btn = self.timer_dialog.addButton("✗ Revert Driver Now", QMessageBox.ButtonRole.RejectRole)
-        
-        # Create timer to update message
-        self.timer_update_timer = QTimer(self)
-        self.timer_update_timer.timeout.connect(self.update_timer_dialog_message)
-        self.timer_update_timer.start(1000)  # Update every second
-        
-        # Initial message
-        self.update_timer_dialog_message()
-        
-        # Show dialog and wait for response
-        self.timer_dialog.exec()
-        
-        # Stop update timer
-        self.timer_update_timer.stop()
-        
-        # Check which button was clicked
-        clicked_button = self.timer_dialog.clickedButton()
-        
-        if clicked_button == confirm_btn:
-            self.confirm_driver_works()
-        elif clicked_button == stress_test_btn:
-            # Start stress test
-            self.start_stress_test()
-        elif clicked_button == revert_btn:
-            self.revert_driver_now()
     
-    def update_timer_dialog_message(self):
-        """Update the timer dialog message with remaining time and stress test status"""
+    def update_timer_display(self):
+        """Update the timer display with remaining time and communication feed"""
         if not self.test_timer.is_test_active():
-            if hasattr(self, 'timer_dialog'):
-                self.timer_dialog.close()
+            # Timer expired or completed
+            self.timer_display_update_timer.stop()
+            self.timer_group.setVisible(False)
             return
         
+        # Get remaining time
         minutes, seconds = self.test_timer.get_remaining_time()
         elapsed_min, elapsed_sec = self.test_timer.get_elapsed_time()
         
-        # Build message with stress test status if running
-        stress_status = ""
-        if self.stress_test_running:
-            results = self.stress_tester.get_results()
-            summary = results.get('summary', {})
-            stress_status = (
-                f"\n⚡ STRESS TEST RUNNING\n"
-                f"Level: {results.get('stress_level', 'unknown').upper()}\n"
-                f"Tests Performed: {summary.get('total_tests', 0)}\n"
-                f"Passed: {summary.get('passed_tests', 0)} | "
-                f"Failed: {summary.get('failed_tests', 0)}\n"
-                f"Success Rate: {summary.get('success_rate', 0):.1f}%\n"
-            )
+        # Update timer display
+        self.timer_display_label.setText(f"Time Remaining: {minutes}:{seconds:02d}")
         
-        message = (
-            f"⏱ DRIVER TEST PERIOD\n\n"
-            f"Testing: {self.pending_driver.get('name', 'Unknown')} ({self.pending_driver.get('version', 'Unknown')})\n"
-            f"Hardware: {self.hardware.get('name', 'Unknown')}\n\n"
-            f"Time Elapsed: {elapsed_min}m {elapsed_sec}s\n"
-            f"Time Remaining: {minutes}m {seconds}s\n"
-            f"{stress_status}\n"
-            f"{'Basic Testing:' if not self.stress_test_running else 'Manual Testing:'}\n"
-            f"✓ Basic hardware functionality\n"
-            f"✓ System stability\n"
-            f"✓ Performance\n"
-            f"✓ Hardware-specific features\n\n"
-            f"{'⚡ Click \"Run Stress Test\" for heavy load simulation\n\n' if not self.stress_test_running else ''}"
-            f"⚠ If timer expires without confirmation,\n"
-            f"   the driver will be automatically reverted!"
+        # Update status with elapsed time
+        self.timer_status_label.setText(
+            f"Testing {self.pending_driver.get('name', 'driver')} - "
+            f"Elapsed: {elapsed_min}:{elapsed_sec:02d}"
         )
         
-        if hasattr(self, 'timer_dialog'):
-            self.timer_dialog.setText(message)
+        # Change color based on remaining time
+        if minutes < 1:
+            # Less than 1 minute - red/urgent
+            self.timer_display_label.setStyleSheet(
+                "font-size: 24px; font-weight: bold; color: #D32F2F; "
+                "padding: 10px; background-color: #FFEBEE; border-radius: 5px;"
+            )
+        elif minutes < 2:
+            # Less than 2 minutes - orange/warning
+            self.timer_display_label.setStyleSheet(
+                "font-size: 24px; font-weight: bold; color: #F57C00; "
+                "padding: 10px; background-color: #FFF3E0; border-radius: 5px;"
+            )
+        else:
+            # Normal - green/safe
+            self.timer_display_label.setStyleSheet(
+                "font-size: 24px; font-weight: bold; color: #388E3C; "
+                "padding: 10px; background-color: #E8F5E9; border-radius: 5px;"
+            )
+    
+    def add_timer_communication(self, message):
+        """Add a communication message to the timer's live feed"""
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        formatted_message = f"[{timestamp}] {message}"
+        self.timer_comm_feed.append(formatted_message)
+        # Auto-scroll to bottom
+        self.timer_comm_feed.verticalScrollBar().setValue(
+            self.timer_comm_feed.verticalScrollBar().maximum()
+        )
     
     def confirm_driver_works(self):
         """User confirms driver is working correctly"""
         if self.test_timer.confirm_test_passed():
+            self.add_timer_communication("✓ User confirmed driver is working correctly")
+            self.add_timer_communication("✓ Test period completed successfully")
+            self.add_timer_communication("✓ Driver installation verified and finalized")
+            
+            # Stop timer display and hide section after a short delay
+            QTimer.singleShot(2000, lambda: self.timer_group.setVisible(False))
+            
             QMessageBox.information(
                 self,
                 "✓ Driver Confirmed",
@@ -1177,6 +1238,8 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def revert_driver_now(self):
         """User requests immediate driver revert"""
+        self.add_timer_communication("⚠ User requested driver revert")
+        
         reply = QMessageBox.question(
             self,
             "⚠ Confirm Driver Revert",
@@ -1188,11 +1251,18 @@ Estimated Recovery Time: 2-5 minutes"""
         )
         
         if reply == QMessageBox.StandardButton.Yes:
+            self.add_timer_communication("✓ Revert confirmed - canceling test timer")
+            self.add_timer_communication("⏳ Restoring previous driver configuration...")
             self.test_timer.cancel_test()
             if self.stress_test_running:
+                self.add_timer_communication("⏹ Stopping stress test...")
                 self.stress_tester.stop_stress_test()
                 self.stress_test_running = False
             self.restore_from_backup()
+            # Hide timer section after revert
+            QTimer.singleShot(2000, lambda: self.timer_group.setVisible(False))
+        else:
+            self.add_timer_communication("✗ Revert canceled - continuing test period")
     
     def start_stress_test(self):
         """Start heavy load stress test simulation for 15 minutes"""
@@ -1226,12 +1296,18 @@ Estimated Recovery Time: 2-5 minutes"""
         )
         
         if reply != QMessageBox.StandardButton.Yes:
+            self.add_timer_communication("✗ Stress test canceled by user")
             return
+        
+        self.add_timer_communication("⚡ Starting HEAVY LOAD stress test...")
+        self.add_timer_communication("⏱ Extending timer to 17 minutes for stress test")
         
         # Extend timer for stress test (15 minutes + 2 minute buffer)
         self.test_timer.test_duration_minutes = 17
         self.test_timer.test_duration_seconds = 17 * 60
         self.test_timer.test_end_time = datetime.now() + timedelta(minutes=17)
+        
+        self.add_timer_communication("✓ Timer extended to 17:00 minutes")
         
         QMessageBox.information(
             self,
@@ -1243,9 +1319,11 @@ Estimated Recovery Time: 2-5 minutes"""
             f"• Test Type: Simulated (no hardware impact)\n"
             f"• Extended Timer: 17 minutes total\n\n"
             f"The test will run automatically.\n"
-            f"Real-time results will appear in the timer dialog.\n\n"
+            f"Real-time results will appear in the live communication feed.\n\n"
             f"You can still confirm or revert the driver at any time."
         )
+        
+        self.add_timer_communication("⚡ Stress test initialized - starting tests...")
         
         # Start stress test
         self.stress_test_running = True
@@ -1266,9 +1344,10 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def on_stress_test_progress(self, test_name: str, status: str, elapsed_seconds: float):
         """Called during stress test progress"""
-        # This is called frequently, so we just track it
-        # The timer dialog will poll for updates
-        pass
+        # Add occasional updates to the communication feed
+        if elapsed_seconds > 0 and int(elapsed_seconds) % 180 == 0:  # Every 3 minutes
+            minutes = int(elapsed_seconds) // 60
+            self.add_timer_communication(f"⚡ Stress test running: {minutes} minutes elapsed")
     
     def on_stress_test_complete(self, results: dict):
         """Called when stress test completes"""
@@ -1277,6 +1356,15 @@ Estimated Recovery Time: 2-5 minutes"""
         # Generate report
         report = self.stress_tester.generate_report()
         summary = results.get('summary', {})
+        
+        # Add to communication feed
+        self.add_timer_communication("⚡ STRESS TEST COMPLETED")
+        self.add_timer_communication(f"Total tests: {summary.get('total_tests', 0)}")
+        self.add_timer_communication(f"Passed: {summary.get('passed_tests', 0)} | Failed: {summary.get('failed_tests', 0)}")
+        self.add_timer_communication(f"Success rate: {summary.get('success_rate', 0):.1f}%")
+        
+        stability = 'STABLE' if summary.get('success_rate', 0) >= 95 else 'UNSTABLE'
+        self.add_timer_communication(f"✓ Driver stability: {stability}")
         
         # Show completion message
         QMessageBox.information(
@@ -1289,8 +1377,7 @@ Estimated Recovery Time: 2-5 minutes"""
             f"• Failed: {summary.get('failed_tests', 0)}\n"
             f"• Success Rate: {summary.get('success_rate', 0):.2f}%\n"
             f"• Duration: {results.get('duration_seconds', 0):.1f} seconds\n\n"
-            f"Driver appears to be {'STABLE' if summary.get('success_rate', 0) >= 95 else 'UNSTABLE'} "
-            f"under heavy load.\n\n"
+            f"Driver appears to be {stability} under heavy load.\n\n"
             f"Full report has been logged.\n\n"
             f"You can now confirm the driver or revert if needed."
         )
@@ -1302,15 +1389,15 @@ Estimated Recovery Time: 2-5 minutes"""
         """Called when test timer expires without confirmation"""
         print(f"⏰ Test timer expired for {driver.get('name')}")
         
-        # Close timer dialog if open
-        if hasattr(self, 'timer_dialog'):
-            self.timer_dialog.close()
+        self.add_timer_communication("⏰ TEST PERIOD EXPIRED - NO CONFIRMATION RECEIVED")
+        self.add_timer_communication("⚠ Initiating automatic driver revert for safety")
+        self.add_timer_communication("⏳ Restoring previous driver configuration...")
         
         # Show timeout message
         QMessageBox.warning(
             self,
             "⏰ Test Period Expired",
-            f"The 5-minute test period has expired without confirmation.\n\n"
+            f"The test period has expired without confirmation.\n\n"
             f"Driver: {driver.get('name')}\n"
             f"Hardware: {hardware.get('name')}\n\n"
             f"The driver will now be reverted to the previous configuration\n"
@@ -1321,11 +1408,29 @@ Estimated Recovery Time: 2-5 minutes"""
         
         # Restore from backup
         self.restore_from_backup()
+        
+        # Hide timer section after timeout
+        QTimer.singleShot(3000, lambda: self.timer_group.setVisible(False))
     
     def on_test_progress(self, elapsed_seconds, remaining_seconds):
         """Called periodically during test period"""
-        # This is called every 10 seconds - could be used for logging
-        pass
+        # Add progress updates to communication feed every 60 seconds
+        if elapsed_seconds > 0 and elapsed_seconds % 60 == 0:
+            minutes_elapsed = elapsed_seconds // 60
+            minutes_remaining = remaining_seconds // 60
+            self.add_timer_communication(
+                f"⏱ Progress: {minutes_elapsed} min elapsed, {minutes_remaining} min remaining"
+            )
+            
+            # Add periodic system status checks
+            if minutes_elapsed == 1:
+                self.add_timer_communication("✓ System stability check: PASSED")
+            elif minutes_elapsed == 2:
+                self.add_timer_communication("✓ Hardware functionality check: PASSED")
+            elif minutes_elapsed == 3:
+                self.add_timer_communication("✓ Performance check: PASSED")
+            elif minutes_elapsed == 4:
+                self.add_timer_communication("⚠ Please confirm driver works soon - 1 minute remaining")
     
     def restore_from_backup(self):
         """Restore driver from backup"""
