@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 def test_driver_operation_decoder():
     """Test the driver operation decoder"""
-    from utils.driver_operation_decoder import DriverOperationDecoder
+    from decoder_training_system import DriverOperationDecoder
     
     print("=" * 70)
     print("DRIVER OPERATION DECODER TESTS")

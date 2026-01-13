@@ -539,6 +539,78 @@ echo ""
 echo "Checking current active drivers..."
 # Backup directory already created during configuration setup
 
+echo ""
+echo "Testing Decoder and Training System..."
+# Test decoder_training_system integration
+if "$INSTALL_DIR/venv/bin/python" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR/src')
+
+print('=' * 50)
+print('DECODER & TRAINING SYSTEM VALIDATION')
+print('=' * 50)
+
+# Test 1: Import modules
+try:
+    from decoder_training_system import DriverOperationDecoder, DriverTrainingDataCollector
+    print('✓ Decoder and Training modules imported')
+except ImportError as e:
+    print(f'✗ Import failed: {e}')
+    sys.exit(1)
+
+# Test 2: Initialize decoder
+try:
+    decoder = DriverOperationDecoder()
+    print('✓ DriverOperationDecoder initialized')
+except Exception as e:
+    print(f'✗ Decoder initialization failed: {e}')
+    sys.exit(1)
+
+# Test 3: Initialize collector
+try:
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        collector = DriverTrainingDataCollector(data_dir=tmpdir)
+        print('✓ DriverTrainingDataCollector initialized')
+except Exception as e:
+    print(f'✗ Collector initialization failed: {e}')
+    sys.exit(1)
+
+# Test 4: Test integration module
+try:
+    from decoder_training_system.integration import DecoderTrainingIntegration, create_integration
+    print('✓ Integration module loaded')
+except ImportError as e:
+    print(f'✗ Integration import failed: {e}')
+    sys.exit(1)
+
+# Test 5: Test basic decoding
+try:
+    decoder = DriverOperationDecoder()
+    ops = decoder.translate_device_id_to_operations('10de', '1c03')
+    if ops and len(ops) > 0:
+        print(f'✓ Device ID decoding works ({len(ops)} operations found)')
+    else:
+        print('✗ Device ID decoding returned empty results')
+        sys.exit(1)
+except Exception as e:
+    print(f'✗ Decoding test failed: {e}')
+    sys.exit(1)
+
+print('')
+print('✓ All decoder & training system tests passed')
+print('=' * 50)
+" 2>&1; then
+    echo "✓ Decoder and Training System validated"
+else
+    echo "⚠ Warning: Decoder and Training System tests had issues"
+    echo "  System will still function but training features may be limited"
+fi
+
+echo ""
+echo "Checking current active drivers..."
+# Backup directory already created during configuration setup
+
 # Check and list current active drivers
 "$INSTALL_DIR/venv/bin/python" -c "
 import sys

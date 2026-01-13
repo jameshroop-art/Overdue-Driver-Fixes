@@ -18,8 +18,7 @@ def test_training_data_collection():
     print("=" * 70)
     print()
     
-    from utils.driver_training_data import DriverTrainingDataCollector
-    from utils.driver_operation_decoder import DriverOperationDecoder
+    from decoder_training_system import DriverTrainingDataCollector, DriverOperationDecoder
     
     # Use temporary directory for testing
     with tempfile.TemporaryDirectory() as tmpdir:

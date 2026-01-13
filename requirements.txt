@@ -12,3 +12,15 @@ psutil>=5.9.0
 requests>=2.28.0
 pyyaml>=6.0
 setuptools>=65.0
+
+# Decoder and Training System dependencies
+# These are built-in modules but listed for documentation:
+# - sqlite3 (built-in)
+# - subprocess (built-in)
+# - pathlib (built-in)
+# - json (built-in)
+# - csv (built-in)
+# - datetime (built-in)
+# - hashlib (built-in)
+# - re (built-in)
+
