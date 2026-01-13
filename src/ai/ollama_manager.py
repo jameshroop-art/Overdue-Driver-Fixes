@@ -219,7 +219,7 @@ class OllamaManager:
                     'available_models': model_names,
                     'port': self.ollama_port
                 }
-        except:
+        except (requests.RequestException, OSError, ValueError):
             pass
         
         return {
