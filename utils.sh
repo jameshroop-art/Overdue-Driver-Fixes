@@ -53,8 +53,7 @@ detect_package_manager() {
     fi
 }
 
-# Export functions for use in other scripts
-export -f detect_opengl_package 2>/dev/null || true
-export -f check_library 2>/dev/null || true
-export -f detect_distribution 2>/dev/null || true
-export -f detect_package_manager 2>/dev/null || true
+# Note: Function exports only work when this file is sourced with 'source' or '.'
+# If the shell doesn't support function exports (some minimal shells), 
+# scripts can still call the functions directly after sourcing this file.
+# The 2>/dev/null suppresses errors in shells that don't support -f flag with export.

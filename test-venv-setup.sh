@@ -1,8 +1,6 @@
 #!/bin/bash
 # Test script to verify venv setup and wrapper functionality
 
-set +e
-
 echo "=========================================="
 echo "driver-mgt Installation Test"
 echo "=========================================="

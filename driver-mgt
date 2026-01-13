@@ -64,12 +64,21 @@ export VIRTUAL_ENV="$VENV_DIR"
 # Update PATH to include venv bin directory
 export PATH="$VENV_DIR/bin:$PATH"
 
+# Dependency mapping: import_name:package_name
+# This should match the imports in driver-mgt.py and requirements.txt
+DEPENDENCY_MAP=(
+    "PyQt6:PyQt6"
+    "psutil:psutil"
+    "requests:requests"
+    "yaml:pyyaml"
+)
+
 # Quick dependency check (optional, but helpful)
 echo -n "Checking Python dependencies... "
 MISSING_DEPS=()
 
 # Check each dependency individually for better error messages
-for dep_import in "PyQt6:PyQt6" "psutil:psutil" "requests:requests" "yaml:pyyaml"; do
+for dep_import in "${DEPENDENCY_MAP[@]}"; do
     IFS=':' read -r import_name pkg_name <<< "$dep_import"
     if ! "$VENV_PYTHON" -c "import $import_name" 2>/dev/null; then
         MISSING_DEPS+=("$pkg_name")

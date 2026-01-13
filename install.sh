@@ -240,7 +240,7 @@ source "$INSTALL_DIR/venv/bin/activate"
 # Verify we're in the venv
 if [ -z "$VIRTUAL_ENV" ]; then
     echo "⚠ Warning: Virtual environment activation may have failed"
-    echo "  Continuing with direct venv Python calls..."
+    echo "  Will use direct venv Python executable for installation..."
 fi
 
 # Upgrade pip in the venv
