@@ -91,6 +91,12 @@ class DeviceTab(QWidget):
         self.chat_history = []
         self.monitored_operations = []
         
+        # Initialize driver converter
+        from ai.driver_converter import DriverConverter
+        self.driver_converter = DriverConverter(config_manager, ai_manager)
+        self.chat_history = []
+        self.monitored_operations = []
+        
         self.init_ui()
         self.load_drivers()
     
@@ -773,20 +779,37 @@ Estimated Recovery Time: 2-5 minutes"""
                 status_item.setToolTip(f"Cannot connect to: {source_url}")
             self.drivers_table.setItem(i, 6, status_item)
             
-            # Install/Download button
+            # Install/Download/Convert buttons
             target_os = driver.get('target_os', 'linux').lower()
             download_only = driver.get('download_only', False)
             
+            # Create button container with layout
+            button_widget = QWidget()
+            button_layout = QHBoxLayout(button_widget)
+            button_layout.setContentsMargins(2, 2, 2, 2)
+            button_layout.setSpacing(4)
+            
             if target_os == 'linux' and not download_only:
+                # Linux driver - Install button only
                 action_btn = QPushButton("Install with AI")
                 action_btn.clicked.connect(lambda checked, d=driver: self.install_driver(d))
+                button_layout.addWidget(action_btn)
             else:
-                action_btn = QPushButton("Download")
-                action_btn.setToolTip(f"Download {target_os.upper()} driver for analysis/compatibility research")
-                action_btn.clicked.connect(lambda checked, d=driver: self.download_driver(d))
-                action_btn.setStyleSheet("background-color: #3a5a7a;")
+                # Cross-OS driver - Download and Convert buttons
+                download_btn = QPushButton("Download")
+                download_btn.setToolTip(f"Download {target_os.upper()} driver for analysis")
+                download_btn.clicked.connect(lambda checked, d=driver: self.download_driver(d))
+                download_btn.setStyleSheet("background-color: #3a5a7a;")
+                button_layout.addWidget(download_btn)
+                
+                # Add Convert button for cross-OS drivers
+                convert_btn = QPushButton("Convert to Linux")
+                convert_btn.setToolTip(f"Use AI to convert {target_os.upper()} driver to Linux")
+                convert_btn.clicked.connect(lambda checked, d=driver: self.convert_driver(d))
+                convert_btn.setStyleSheet("background-color: #5a3a7a; font-weight: bold;")
+                button_layout.addWidget(convert_btn)
             
-            self.drivers_table.setCellWidget(i, 7, action_btn)
+            self.drivers_table.setCellWidget(i, 7, button_widget)
     
     def filter_drivers(self):
         """Filter drivers by source"""
@@ -952,6 +975,130 @@ Estimated Recovery Time: 2-5 minutes"""
                 f"Destination: ~/Downloads/cross-os-drivers/\n\n"
                 f"Note: This is a placeholder. Actual download functionality\n"
                 f"would be implemented with proper file handling and verification."
+            )
+    
+    def convert_driver(self, driver):
+        """Convert a cross-OS driver to Linux using AI"""
+        target_os = driver.get('target_os', 'unknown').upper()
+        
+        # Show warning and get confirmation
+        reply = QMessageBox.question(
+            self,
+            "AI Driver Conversion (Experimental)",
+            f"⚠ EXPERIMENTAL FEATURE ⚠\n\n"
+            f"Attempt to convert {driver['name']} ({target_os}) to Linux?\n\n"
+            f"Process:\n"
+            f"1. AI will analyze the {target_os} driver structure\n"
+            f"2. Determine conversion feasibility\n"
+            f"3. Generate equivalent Linux driver code\n"
+            f"4. Provide testing recommendations\n\n"
+            f"⚠ Important Warnings:\n"
+            f"• This is highly experimental and may not succeed\n"
+            f"• Generated driver will require extensive testing\n"
+            f"• May not include all original features\n"
+            f"• Use only in safe/virtual environments\n"
+            f"• Not recommended for production systems\n\n"
+            f"Continue with conversion attempt?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Create progress dialog
+        progress_dialog = QProgressDialog(
+            "Analyzing driver for conversion...",
+            "Cancel",
+            0, 100,
+            self
+        )
+        progress_dialog.setWindowTitle("AI Driver Conversion")
+        progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dialog.show()
+        
+        try:
+            # Step 1: Analyze driver (30%)
+            progress_dialog.setValue(10)
+            progress_dialog.setLabelText(f"Analyzing {target_os} driver structure...")
+            
+            analysis = self.driver_converter.analyze_driver(driver, self.hardware)
+            
+            progress_dialog.setValue(30)
+            progress_dialog.setLabelText("Analysis complete. Checking feasibility...")
+            
+            # Show analysis results
+            if not analysis.get('feasible'):
+                progress_dialog.close()
+                QMessageBox.warning(
+                    self,
+                    "Conversion Not Feasible",
+                    f"AI analysis determined this driver cannot be converted.\n\n"
+                    f"Confidence: {analysis.get('confidence', 0)}%\n"
+                    f"Complexity: {analysis.get('complexity', 'unknown')}\n\n"
+                    f"Potential Issues:\n" +
+                    "\n".join(f"• {issue}" for issue in analysis.get('potential_issues', [])) +
+                    f"\n\nRecommendations:\n" +
+                    "\n".join(f"• {rec}" for rec in analysis.get('recommendations', []))
+                )
+                return
+            
+            # Step 2: Attempt conversion (70%)
+            progress_dialog.setValue(40)
+            progress_dialog.setLabelText(f"Generating Linux driver code...")
+            
+            conversion_result = self.driver_converter.attempt_conversion(
+                driver, self.hardware, analysis
+            )
+            
+            progress_dialog.setValue(90)
+            progress_dialog.setLabelText("Finalizing conversion...")
+            
+            progress_dialog.setValue(100)
+            progress_dialog.close()
+            
+            # Show results
+            if conversion_result.get('success'):
+                converted_driver = conversion_result.get('converted_driver')
+                
+                # Add converted driver to available drivers list
+                if converted_driver:
+                    self.available_drivers.append(converted_driver)
+                    self.update_drivers_table()
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "Conversion Successful!",
+                    f"✓ AI successfully converted {driver['name']} to Linux!\n\n"
+                    f"Converted Driver: {converted_driver.get('name', 'Unknown')}\n"
+                    f"Version: {converted_driver.get('version', 'Unknown')}\n"
+                    f"Status: {converted_driver.get('stability', 'experimental')}\n"
+                    f"Risk: {converted_driver.get('risk_percentage', 75)}% (Experimental)\n\n"
+                    f"⚠ Important:\n" +
+                    "\n".join(f"• {warn}" for warn in conversion_result.get('warnings', [])) +
+                    f"\n\nNext Steps:\n" +
+                    "\n".join(f"• {step}" for step in conversion_result.get('next_steps', [])) +
+                    f"\n\nThe converted driver is now available in the drivers list."
+                )
+            else:
+                # Show failure message
+                QMessageBox.warning(
+                    self,
+                    "Conversion Failed",
+                    f"✗ AI could not convert {driver['name']} to Linux.\n\n"
+                    f"Conversion Log:\n" +
+                    "\n".join(f"• {log}" for log in conversion_result.get('conversion_log', [])) +
+                    f"\n\nWarnings:\n" +
+                    "\n".join(f"• {warn}" for warn in conversion_result.get('warnings', []))
+                )
+        
+        except Exception as e:
+            progress_dialog.close()
+            QMessageBox.critical(
+                self,
+                "Conversion Error",
+                f"An error occurred during conversion:\n\n{str(e)}\n\n"
+                f"Please check AI assistant status and try again."
             )
     
     def test_current_driver(self):
