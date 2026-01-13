@@ -1,7 +1,24 @@
 # Virtual Environment Setup and libgl1-mesa-glx Fix - Implementation Summary
 
 ## Overview
-This implementation fixes the `libgl1-mesa-glx` package availability issue in Ubuntu 24.04+ and implements automatic virtual environment activation for the driver-mgt application.
+This implementation fixes the `libgl1-mesa-glx` package availability issue in Ubuntu 24.04+ and implements automatic virtual environment activation for the driver-mgt application. It also includes Python build dependencies to prevent SSL and module compilation errors.
+
+## Recent Update: Python Build Dependencies
+**Problem:** When Python venv is created or when Python extensions are compiled, missing build dependencies can cause errors like:
+- "Could not build the ssl module!"
+- "Python requires OpenSSL 1.1.1 or newer"
+- Missing modules: `_ssl`, `_hashlib`, `_bz2`, `_lzma`, `_sqlite3`, `_gdbm`, `readline`
+
+**Solution:** Added essential Python build dependencies to `install.sh` and `check-system-deps.sh`:
+- `libssl-dev` - OpenSSL development libraries (SSL/TLS support)
+- `libbz2-dev` - bzip2 compression library
+- `liblzma-dev` - LZMA/XZ compression library  
+- `libsqlite3-dev` - SQLite database library
+- `libreadline-dev` - readline library for interactive input
+- `libgdbm-dev` - GNU dbm database library
+- `libffi-dev` - Foreign Function Interface library
+
+These dependencies are now installed for all package managers (apt, dnf, pacman).
 
 ## Changes Made
 
@@ -28,6 +45,7 @@ This implementation fixes the `libgl1-mesa-glx` package availability issue in Ub
 - Better error handling and verification
 - Improved feedback messages for installation status
 - Deactivates venv cleanly after installation
+- **NEW:** Added Python build dependencies for all package managers (apt, dnf, pacman)
 
 ### 4. System Dependency Checker
 **File: `check-system-deps.sh` (new)**
@@ -36,6 +54,7 @@ This implementation fixes the `libgl1-mesa-glx` package availability issue in Ub
 - Provides distribution-specific installation commands
 - Automatically detects correct OpenGL package for the system
 - Color-coded output for easy understanding
+- **NEW:** Added checks for Python build dependencies (SSL, bzip2, LZMA, SQLite, readline, GDBM, libffi)
 
 ### 5. Updated Start Script
 **File: `start.sh`**

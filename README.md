@@ -238,7 +238,7 @@ driver-mgt uses Python virtual environments to ensure dependency isolation and P
 
 #### System Library Dependencies
 
-PyQt6 and OpenGL require certain system libraries to be installed. The installer handles this automatically, but if you encounter issues:
+PyQt6 and OpenGL require certain system libraries to be installed. Python also needs build dependencies for compiling extensions and creating virtual environments properly. The installer handles this automatically, but if you encounter issues:
 
 ```bash
 # Check system dependencies
@@ -246,8 +246,16 @@ bash check-system-deps.sh
 
 # Install missing dependencies (Debian/Ubuntu)
 sudo apt-get install -y python3-venv libgl1 libegl1 \
-                        libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0
+                        libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 \
+                        libssl-dev libbz2-dev liblzma-dev libsqlite3-dev \
+                        libreadline-dev libgdbm-dev libffi-dev
 ```
+
+**Python Build Dependencies**: The following are required to prevent module compilation errors (SSL, hashlib, bz2, lzma, sqlite3, gdbm, readline):
+- `libssl-dev` - OpenSSL support (required for SSL/TLS)
+- `libbz2-dev`, `liblzma-dev` - Compression support
+- `libsqlite3-dev` - SQLite database support
+- `libreadline-dev`, `libgdbm-dev`, `libffi-dev` - Additional Python modules
 
 **Note for Ubuntu 24.04+**: The package `libgl1-mesa-glx` has been replaced with `libgl1`. The installer and scripts handle this automatically.
 
