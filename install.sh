@@ -20,6 +20,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
 cd "$SCRIPT_DIR"
 
+# Load shared utilities if available
+if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+    source "$SCRIPT_DIR/utils.sh"
+fi
+
 # Detect distribution and package manager
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -108,18 +113,40 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     
     apt-get update
     
+    # Determine which OpenGL library package to use
+    # Ubuntu 24.04+ and newer Debian versions replaced libgl1-mesa-glx with libgl1
+    if type detect_opengl_package &>/dev/null; then
+        OPENGL_PKG=$(detect_opengl_package)
+        if [ "$OPENGL_PKG" = "libgl1-mesa-glx" ]; then
+            echo "Using libgl1-mesa-glx for OpenGL support"
+        else
+            echo "Note: libgl1-mesa-glx not available (obsolete in Ubuntu 24.04+)"
+            echo "Using libgl1 instead"
+        fi
+    else
+        # Fallback if utils.sh not loaded
+        OPENGL_PKG="libgl1"
+        if apt-cache show libgl1-mesa-glx 2>/dev/null | grep -q "^Package: libgl1-mesa-glx"; then
+            OPENGL_PKG="libgl1-mesa-glx"
+            echo "Using libgl1-mesa-glx for OpenGL support"
+        else
+            echo "Note: libgl1-mesa-glx not available (obsolete in Ubuntu 24.04+)"
+            echo "Using libgl1 instead"
+        fi
+    fi
+    
     # Debian 12 (Bookworm) specific packages
     # PEP 668 compliance requires python3-venv for proper isolation
     if [ "$DISTRO_ID" = "debian" ] && [ "$DISTRO_VERSION" = "12" ]; then
         echo "Detected Debian 12 (Bookworm) - installing required packages..."
         apt-get install -y python3 python3-pip python3-venv python3-dev \
                            build-essential pciutils lshw dmidecode \
-                           libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
+                           $OPENGL_PKG libxkbcommon-x11-0 libxcb-xinerama0 \
                            libxcb-cursor0 libegl1
     else
         # General Debian/Ubuntu packages
         apt-get install -y python3 python3-pip python3-venv pciutils lshw dmidecode \
-                           libgl1-mesa-glx libxkbcommon-x11-0 libxcb-xinerama0 \
+                           $OPENGL_PKG libxkbcommon-x11-0 libxcb-xinerama0 \
                            libxcb-cursor0 libegl1
     fi
     
@@ -151,7 +178,7 @@ echo "Installing driver-mgt..."
 
 # Verify required files exist
 echo "Verifying required files..."
-REQUIRED_FILES=("src" "config" "driver-mgt" "requirements.txt" "setup.py")
+REQUIRED_FILES=("src" "config" "driver-mgt" "driver-mgt.py" "requirements.txt" "setup.py")
 MISSING_FILES=()
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -175,8 +202,9 @@ echo "✓ All required files found"
 
 INSTALL_DIR="/opt/driver-mgt"
 mkdir -p "$INSTALL_DIR"
-cp -r src config driver-mgt requirements.txt setup.py "$INSTALL_DIR/"
+cp -r src config driver-mgt driver-mgt.py requirements.txt setup.py "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/driver-mgt"
+chmod +x "$INSTALL_DIR/driver-mgt.py"
 
 echo ""
 echo "Creating virtual environment..."
@@ -184,6 +212,9 @@ cd "$INSTALL_DIR"
 
 # Debian 12 uses PEP 668 - ensure we're creating a proper venv
 # This avoids "externally-managed-environment" errors
+echo "Python version: $(python3 --version)"
+echo "Creating venv at: $INSTALL_DIR/venv"
+
 if ! python3 -m venv venv; then
     echo "✗ Failed to create virtual environment"
     echo "  This might be due to missing python3-venv package"
@@ -197,12 +228,30 @@ if [ ! -f "$INSTALL_DIR/venv/bin/python" ]; then
 fi
 
 echo "✓ Virtual environment created successfully"
+echo "  Location: $INSTALL_DIR/venv"
+echo "  Python: $INSTALL_DIR/venv/bin/python ($(\"$INSTALL_DIR/venv/bin/python\" --version))"
 
 echo ""
-echo "Installing Python packages into venv..."
+echo "Activating virtual environment and installing Python packages..."
+
+# Activate the venv before installing packages
+source "$INSTALL_DIR/venv/bin/activate"
+
+# Verify we're in the venv
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "⚠ Warning: Virtual environment activation may have failed"
+    echo "  Will use direct venv Python executable for installation..."
+fi
+
+# Upgrade pip in the venv
+echo "Upgrading pip..."
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
+
+# Install requirements
+echo "Installing Python packages from requirements.txt..."
 if ! "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"; then
     echo "✗ Failed to install Python packages"
+    deactivate 2>/dev/null || true
     exit 1
 fi
 
@@ -212,7 +261,22 @@ if ! "$INSTALL_DIR/venv/bin/python" -c "import PyQt6, psutil, requests, yaml" 2>
     echo "⚠ Warning: Some dependencies may not be properly installed"
     echo "  Attempting to install again..."
     "$INSTALL_DIR/venv/bin/pip" install --force-reinstall -r "$INSTALL_DIR/requirements.txt"
+    
+    # Verify again after reinstall
+    if ! "$INSTALL_DIR/venv/bin/python" -c "import PyQt6, psutil, requests, yaml" 2>/dev/null; then
+        echo "✗ Failed to verify Python dependencies after reinstall"
+        echo "  You may need to install system packages for PyQt6:"
+        echo "  - For Qt libraries: libxcb-xinerama0, libxcb-cursor0, libxkbcommon-x11-0"
+        echo "  - For OpenGL: libgl1 or libgl1-mesa-glx, libegl1"
+        deactivate 2>/dev/null || true
+        exit 1
+    fi
 fi
+
+echo "✓ All Python packages installed and verified"
+
+# Deactivate venv (we'll activate it via wrapper scripts)
+deactivate 2>/dev/null || true
 
 # Create symlink
 ln -sf "$INSTALL_DIR/driver-mgt" /usr/local/bin/driver-mgt

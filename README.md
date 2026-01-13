@@ -232,8 +232,24 @@ driver-mgt uses Python virtual environments to ensure dependency isolation and P
 - **Installed Mode**: Virtual environment at `/opt/driver-mgt/venv`
 - **Development Mode**: Virtual environment at `./venv` in repository root
 - All Python dependencies are installed in the venv (PyQt6, psutil, requests, pyyaml, setuptools)
-- The venv is automatically activated when using `driver-mgt` or `start.sh`
-- No system-wide pip installations required (Debian 12 compliant)
+- The venv is **automatically activated** when using `driver-mgt` or `start.sh` - no manual activation needed
+- The `driver-mgt` command is a bash wrapper that ensures the venv is always active
+- No system-wide pip installations required (Debian 12 PEP 668 compliant)
+
+#### System Library Dependencies
+
+PyQt6 and OpenGL require certain system libraries to be installed. The installer handles this automatically, but if you encounter issues:
+
+```bash
+# Check system dependencies
+bash check-system-deps.sh
+
+# Install missing dependencies (Debian/Ubuntu)
+sudo apt-get install -y python3-venv libgl1 libegl1 \
+                        libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0
+```
+
+**Note for Ubuntu 24.04+**: The package `libgl1-mesa-glx` has been replaced with `libgl1`. The installer and scripts handle this automatically.
 
 ## 📋 Requirements
 
