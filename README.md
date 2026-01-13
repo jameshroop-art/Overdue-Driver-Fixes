@@ -253,6 +253,19 @@ chmod +x lm-studio.AppImage
 driver-mgt-lmstudio
 ```
 
+**💡 Bonus: Share Models Between LM Studio and Ollama**
+
+Save disk space by sharing models between both AI backends:
+```bash
+# Set up model sharing (one-time setup)
+bash setup-model-sharing.sh
+
+# Now models downloaded via Ollama are available in LM Studio too!
+# Saves 50%+ disk space (no duplicate downloads)
+```
+
+See [LMSTUDIO_OLLAMA_MODEL_SHARING.md](LMSTUDIO_OLLAMA_MODEL_SHARING.md) for details.
+
 **Documentation**:
 - **[LMSTUDIO_SETUP.md](LMSTUDIO_SETUP.md)** - Complete installation and configuration guide
   - Detailed installation instructions
@@ -260,8 +273,13 @@ driver-mgt-lmstudio
   - How to download and manage additional models from online servers
   - Performance optimization tips
   - Comprehensive troubleshooting guide
+- **[LMSTUDIO_OLLAMA_MODEL_SHARING.md](LMSTUDIO_OLLAMA_MODEL_SHARING.md)** - Share models between LM Studio and Ollama
+  - Save 50%+ disk space
+  - Avoid duplicate model downloads
+  - Seamless backend switching
 - **[LMSTUDIO_QUICKREF.md](LMSTUDIO_QUICKREF.md)** - Quick reference card for daily use
 - **setup-lmstudio.sh** - Automated installation script
+- **setup-model-sharing.sh** - Automated model sharing setup
 
 ### Virtual Environment Details
 

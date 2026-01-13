@@ -252,6 +252,31 @@ To change the download location:
 3. Change "Model Storage Path"
 4. Click "Apply"
 
+### Sharing Models with Ollama
+
+**💡 Save disk space by sharing models between LM Studio and Ollama!**
+
+Both LM Studio and Ollama use the same GGUF model format, so they can share models. This avoids downloading the same models twice (saving 4-50GB per model).
+
+**📖 Complete Guide**: [LMSTUDIO_OLLAMA_MODEL_SHARING.md](LMSTUDIO_OLLAMA_MODEL_SHARING.md)
+
+**Quick Setup**:
+```bash
+# Run the automated setup script
+bash setup-model-sharing.sh
+
+# This creates symlinks so LM Studio can access Ollama models
+# No duplication, no conversion needed!
+```
+
+**Benefits**:
+- ✅ Save 50% or more disk space
+- ✅ Use models downloaded via Ollama in LM Studio
+- ✅ Seamless switching between backends
+- ✅ Single source of truth for model management
+
+See [LMSTUDIO_OLLAMA_MODEL_SHARING.md](LMSTUDIO_OLLAMA_MODEL_SHARING.md) for detailed instructions.
+
 ### Managing Downloaded Models
 
 View and manage your models:

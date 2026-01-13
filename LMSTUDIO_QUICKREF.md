@@ -59,6 +59,21 @@ lm-studio  # or ./lm-studio.AppImage
 driver-mgt-lmstudio
 ```
 
+## Model Sharing (Save Disk Space!)
+
+```bash
+# One-time setup to share models with Ollama
+bash setup-model-sharing.sh
+
+# Download models via Ollama (they appear in LM Studio automatically)
+ollama pull starcoder:3b
+
+# Verify sharing
+ls -la ~/.cache/lm-studio/models/ | grep ^l  # Shows symlinks
+
+# See: LMSTUDIO_OLLAMA_MODEL_SHARING.md for details
+```
+
 ## Quick Commands
 
 ```bash
@@ -73,6 +88,9 @@ cat ~/.config/driver-mgt/logs/driver-mgt.log
 
 # List downloaded models
 ls -lh ~/.cache/lm-studio/models/
+
+# Verify model sharing setup
+bash setup-model-sharing.sh --verify
 ```
 
 ## Recommended Models

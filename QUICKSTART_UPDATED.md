@@ -155,12 +155,22 @@ driver-mgt-lmstudio
 # Or use the desktop launcher: "Driver Manager (LLM Studio)"
 ```
 
+**💡 Bonus - Share Models with Ollama**:
+```bash
+# Share models between LM Studio and Ollama (saves disk space!)
+bash setup-model-sharing.sh
+
+# Now models from Ollama are accessible in LM Studio
+# See: LMSTUDIO_OLLAMA_MODEL_SHARING.md
+```
+
 **Features**:
 - ✓ Localhost operation (complete privacy)
 - ✓ Download additional models from online repositories
 - ✓ OpenAI-compatible API
 - ✓ Multiple concurrent instances supported
 - ✓ GPU acceleration (NVIDIA/AMD)
+- ✓ Can share models with Ollama (no duplication)
 
 **Requirements**:
 - LM Studio must be running on http://localhost:1234
