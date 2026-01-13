@@ -112,7 +112,7 @@ DOWNLOAD_FILE="$DOWNLOAD_DIR/lm-studio-linux-x64.AppImage"
 
 # Download with progress
 if command -v wget &> /dev/null; then
-    wget https://lmstudio.ai/download/latest/linux/x64 -O "$DOWNLOAD_FILE" || {
+    wget https://lmstudio.ai/download/latest/linux/x64 -o "$DOWNLOAD_FILE" || {
         echo -e "${RED}✗ Download failed${NC}"
         exit 1
     }
