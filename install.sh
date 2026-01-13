@@ -4,6 +4,9 @@
 
 set -e
 
+# Configuration constants
+MAX_NETWORK_DEVICES_DISPLAY=3  # Maximum number of network devices to display during install
+
 echo "====================================="
 echo "driver-mgt Installation"
 echo "====================================="
@@ -196,6 +199,7 @@ echo ""
 echo "Creating configuration directories..."
 mkdir -p /etc/driver-mgt
 mkdir -p /root/driver-backups
+chmod 755 /root/driver-backups
 
 # Get the actual user (not root)
 ACTUAL_USER="${SUDO_USER:-$USER}"
@@ -439,15 +443,18 @@ else
 fi
 
 echo ""
-echo "Running backup system tests..."
-# Test backup functionality with None handling
+echo "Running backup and timer validation tests..."
+# Test backup and timer functionality in single Python execution
 if "$INSTALL_DIR/venv/bin/python" -c "
 import sys
 sys.path.insert(0, '$INSTALL_DIR/src')
 from utils.driver_backup import DriverBackupManager
+from utils.driver_test_timer import DriverTestTimer
 import tempfile
 
-print('Testing backup system...')
+print('=' * 50)
+print('BACKUP SYSTEM VALIDATION')
+print('=' * 50)
 with tempfile.TemporaryDirectory() as tmpdir:
     backup_mgr = DriverBackupManager(backup_dir=tmpdir)
     
@@ -488,26 +495,18 @@ with tempfile.TemporaryDirectory() as tmpdir:
         sys.exit(1)
 
 print('✓ All backup tests passed')
-" 2>&1; then
-    echo "✓ Backup system validated"
-else
-    echo "⚠ Warning: Backup system tests failed"
-    echo "  The backup system may not handle None values correctly"
-fi
+print('')
 
-echo ""
-echo "Testing timer functionality..."
-# Test timer functionality
-if "$INSTALL_DIR/venv/bin/python" -c "
-import sys
-sys.path.insert(0, '$INSTALL_DIR/src')
-from utils.driver_test_timer import DriverTestTimer
-
-print('Testing timer system...')
+print('=' * 50)
+print('TIMER SYSTEM VALIDATION')
+print('=' * 50)
 # Test initialization
 timer = DriverTestTimer(test_duration_minutes=5)
-if not timer:
-    print('✗ Timer initialization failed')
+if timer.test_duration_minutes != 5:
+    print('✗ Timer initialization failed - duration not set correctly')
+    sys.exit(1)
+if timer.test_duration_seconds != 300:
+    print('✗ Timer initialization failed - duration in seconds incorrect')
     sys.exit(1)
 print('✓ Timer initialized correctly')
 
@@ -525,23 +524,28 @@ if minutes != 0 or seconds != 0:
 print('✓ Remaining time calculation works')
 
 print('✓ All timer tests passed')
+print('')
+print('=' * 50)
+print('ALL VALIDATION TESTS PASSED')
+print('=' * 50)
 " 2>&1; then
-    echo "✓ Timer system validated"
+    echo "✓ Backup and timer systems validated"
 else
-    echo "⚠ Warning: Timer system tests failed"
+    echo "⚠ Warning: Validation tests failed"
+    echo "  The backup or timer system may have issues"
 fi
 
 echo ""
 echo "Checking current active drivers..."
-# Create backup directory for driver backups
-mkdir -p /root/driver-backups
-chmod 755 /root/driver-backups
+# Backup directory already created during configuration setup
 
 # Check and list current active drivers
 "$INSTALL_DIR/venv/bin/python" -c "
 import sys
 import subprocess
 import re
+
+MAX_NET_DEVICES = $MAX_NETWORK_DEVICES_DISPLAY
 
 print('Scanning for active drivers...')
 print('')
@@ -608,7 +612,7 @@ except Exception as e:
 
 if net_info:
     print('Network Drivers:')
-    for net in net_info[:3]:  # Limit to first 3
+    for net in net_info[:MAX_NET_DEVICES]:  # Use configurable limit
         lines = net.strip().split('\n')
         device_line = lines[0] if lines else ''
         print(f'  • {device_line}')
