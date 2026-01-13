@@ -37,6 +37,7 @@ class AllTestsWorker(QThread):
         from ai.virtual_kernel_simulator import VirtualKernelSimulator
         from ai.driver_converter import DriverConverter
         from utils.driver_stress_test import DriverStressTest
+        from utils.device_behavior_recorder import DeviceBehaviorRecorder
         
         overall_results = {
             'started': datetime.now().isoformat(),
@@ -46,17 +47,44 @@ class AllTestsWorker(QThread):
             'tests_passed': 0,
             'tests_failed': 0,
             'device_results': {},
-            'simulated': self.simulate_all
+            'simulated': self.simulate_all,
+            'behaviors_recorded': 0
         }
         
-        # Initialize AI virtual kernel simulator
-        virtual_kernel = VirtualKernelSimulator(self.ai_manager)
+        # Step 0: Record actual device behaviors from real system
+        self.progress.emit("System", 0, "Recording actual device behaviors and kernel interactions...")
+        
+        behavior_recorder = DeviceBehaviorRecorder()
+        
+        # Record behaviors for all detected devices
+        for device_name, hardware in self.devices.items():
+            try:
+                self.progress.emit(device_name, 0, f"Recording behavior of {device_name}...")
+                behavior = behavior_recorder.record_device_behavior(hardware)
+                overall_results['behaviors_recorded'] += 1
+                
+                self.progress.emit(device_name, 2, 
+                    f"✓ Recorded: {len(behavior.get('device_capabilities', []))} capabilities, "
+                    f"{len(behavior.get('kernel_modules', []))} kernel modules")
+            except Exception as e:
+                self.progress.emit(device_name, 2, f"⚠ Could not record behavior: {str(e)}")
+        
+        # Save recorded behaviors
+        behavior_file = os.path.expanduser('~/.config/driver-mgt/recorded_behaviors.json')
+        behavior_recorder.save_behaviors(behavior_file)
+        self.progress.emit("System", 3, f"✓ Saved {overall_results['behaviors_recorded']} device behaviors")
+        
+        # Initialize AI virtual kernel simulator with recorded behaviors
+        self.progress.emit("System", 5, "Initializing AI virtual kernel with recorded behaviors...")
+        virtual_kernel = VirtualKernelSimulator(self.ai_manager, behavior_recorder)
+        self.progress.emit("System", 7, f"✓ AI kernel initialized (acting as {behavior_recorder.kernel_version})")
+        
         converter = DriverConverter(self.config, self.ai_manager)
         
         total_devices = len(self.devices)
         
         for idx, (device_name, hardware) in enumerate(self.devices.items()):
-            device_progress = int((idx / total_devices) * 100)
+            device_progress = int(10 + (idx / total_devices) * 85)  # Start at 10% after recording
             
             self.progress.emit(device_name, device_progress, f"Testing {device_name}...")
             
@@ -66,18 +94,26 @@ class AllTestsWorker(QThread):
                 'drivers_converted': [],
                 'stress_test_results': None,
                 'simulation_results': None,
-                'overall_status': 'pending'
+                'overall_status': 'pending',
+                'recorded_behavior_used': False
             }
             
             try:
-                # Step 1: Create virtual device for simulation
+                # Step 1: Create virtual device for simulation (using recorded behavior)
                 if self.simulate_all:
-                    self.progress.emit(device_name, device_progress + 5, "Creating virtual device simulation...")
+                    self.progress.emit(device_name, device_progress + 2, 
+                        "Creating virtual device with recorded behavior...")
                     vdev_id = virtual_kernel.create_virtual_device(hardware)
                     device_results['virtual_device_id'] = vdev_id
-                
+                    
+                    # Check if recorded behavior was used
+                    if virtual_kernel.virtual_devices[vdev_id].get('recorded_behavior'):
+                        device_results['recorded_behavior_used'] = True
+                        self.progress.emit(device_name, device_progress + 3, 
+                            "✓ Using recorded real device behavior for accurate simulation")
+                 
                 # Step 2: Find available drivers
-                self.progress.emit(device_name, device_progress + 10, "Finding available drivers...")
+                self.progress.emit(device_name, device_progress + 5, "Finding available drivers...")
                 drivers = self.driver_manager.find_drivers(hardware, include_cross_os=True)
                 
                 # Step 3: Convert cross-OS drivers to Debian-compatible Linux
