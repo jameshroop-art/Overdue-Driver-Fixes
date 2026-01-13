@@ -94,8 +94,6 @@ class DeviceTab(QWidget):
         # Initialize driver converter
         from ai.driver_converter import DriverConverter
         self.driver_converter = DriverConverter(config_manager, ai_manager)
-        self.chat_history = []
-        self.monitored_operations = []
         
         self.init_ui()
         self.load_drivers()
