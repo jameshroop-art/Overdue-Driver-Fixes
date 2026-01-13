@@ -14,8 +14,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from utils.driver_stress_test import DriverStressTest
 
-def run_15_minute_stress_test():
-    """Run full 15-minute heavy load stress test simulation"""
+def run_15_minute_stress_test(hardware_name='NVIDIA GeForce RTX 3090', hardware_id='sim-gpu-001', motherboard='Asus ROG X870 Extreme', cpu='AMD Ryzen 7 7800X3D', ram='64GB'):
+    """Run full 15-minute heavy load stress test simulation
+    
+    Args:
+        hardware_name: Name of the GPU to simulate
+        hardware_id: Hardware identifier
+        motherboard: Motherboard model
+        cpu: CPU model
+        ram: RAM capacity
+    """
     
     print("=" * 80)
     print("15-MINUTE HEAVY LOAD DRIVER STRESS TEST")
@@ -25,17 +33,42 @@ def run_15_minute_stress_test():
     
     # Create simulated hardware device
     simulated_hardware = {
-        'name': 'NVIDIA GeForce RTX 3080 (Simulated)',
+        'name': f'{hardware_name} (Simulated)',
         'type': 'GPU',
         'vendor': 'NVIDIA',
-        'id': 'sim-gpu-001',
-        'driver': 'nvidia-driver-545'
+        'id': hardware_id,
+        'driver': 'nvidia-driver-550',
+        'motherboard': motherboard,
+        'pcie_slot': 'PCIe 5.0 x16',
+        'system': {
+            'cpu': cpu,
+            'cpu_cores': 8,
+            'cpu_threads': 16,
+            'cpu_cache': '96MB 3D V-Cache',
+            'ram': ram,
+            'ram_type': 'DDR5',
+            'ram_speed': '6000MHz',
+            'mb_model': motherboard,
+            'chipset': 'AMD X870',
+            'socket': 'AM5',
+            'pcie_version': '5.0',
+            'memory_type': 'DDR5'
+        }
     }
     
-    print(f"Hardware: {simulated_hardware['name']}")
-    print(f"Type: {simulated_hardware['type']}")
-    print(f"Vendor: {simulated_hardware['vendor']}")
-    print(f"Driver: {simulated_hardware['driver']}")
+    print(f"System Configuration:")
+    print(f"  CPU: {cpu} (8C/16T, 96MB 3D V-Cache)")
+    print(f"  RAM: {ram} DDR5-6000")
+    print(f"  Motherboard: {motherboard}")
+    print(f"  Chipset: AMD X870")
+    print(f"  Socket: AM5")
+    print(f"  PCIe: 5.0 x16")
+    print()
+    print(f"GPU Configuration:")
+    print(f"  Hardware: {simulated_hardware['name']}")
+    print(f"  Type: {simulated_hardware['type']}")
+    print(f"  Vendor: {simulated_hardware['vendor']}")
+    print(f"  Driver: {simulated_hardware['driver']}")
     print()
     
     # Initialize stress tester
@@ -174,12 +207,40 @@ def run_15_minute_stress_test():
 
 if __name__ == '__main__':
     print()
+    
+    # Check command line arguments for hardware selection
+    import argparse
+    parser = argparse.ArgumentParser(description='15-Minute GPU Stress Test')
+    parser.add_argument('--gpu', type=str, default='NVIDIA GeForce RTX 3090',
+                        help='GPU model to simulate (default: NVIDIA GeForce RTX 3090)')
+    parser.add_argument('--id', type=str, default='sim-gpu-001',
+                        help='Hardware ID (default: sim-gpu-001)')
+    parser.add_argument('--motherboard', type=str, default='Asus ROG X870 Extreme',
+                        help='Motherboard model (default: Asus ROG X870 Extreme)')
+    parser.add_argument('--cpu', type=str, default='AMD Ryzen 7 7800X3D',
+                        help='CPU model (default: AMD Ryzen 7 7800X3D)')
+    parser.add_argument('--ram', type=str, default='64GB',
+                        help='RAM capacity (default: 64GB)')
+    args = parser.parse_args()
+    
+    print(f"Test Configuration:")
+    print(f"  CPU: {args.cpu}")
+    print(f"  RAM: {args.ram} DDR5")
+    print(f"  GPU: {args.gpu}")
+    print(f"  Motherboard: {args.motherboard}")
+    print()
     print("⚠ WARNING: This will run for 15 minutes")
     print("Press Ctrl+C at any time to stop the test early")
     print()
     
     try:
-        success = run_15_minute_stress_test()
+        success = run_15_minute_stress_test(
+            hardware_name=args.gpu, 
+            hardware_id=args.id,
+            motherboard=args.motherboard,
+            cpu=args.cpu,
+            ram=args.ram
+        )
         
         if success:
             print("✓ Stress test completed successfully - Driver is stable")
