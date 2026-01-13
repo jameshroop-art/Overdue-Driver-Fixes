@@ -8,6 +8,16 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+# Import risk constants
+from core.driver_manager import RISK_OFFICIAL_STABLE
+
+# Test fixtures
+FAKE_NVIDIA_GPU = {
+    'type': 'GPU',
+    'vendor': 'NVIDIA',
+    'name': 'Test NVIDIA GPU'
+}
+
 def test_trusted_source_identification():
     """Test that trusted sources are properly identified"""
     from core.driver_manager import DriverManager
@@ -16,14 +26,8 @@ def test_trusted_source_identification():
     config = ConfigManager()
     manager = DriverManager(config)
     
-    # Test NVIDIA drivers (should have official source)
-    fake_nvidia_gpu = {
-        'type': 'GPU',
-        'vendor': 'NVIDIA',
-        'name': 'Test NVIDIA GPU'
-    }
-    
-    nvidia_drivers = manager.find_drivers(fake_nvidia_gpu)
+    # Use test fixture
+    nvidia_drivers = manager.find_drivers(FAKE_NVIDIA_GPU)
     assert len(nvidia_drivers) > 0, "Should find NVIDIA drivers"
     
     # Check that official drivers exist
@@ -62,14 +66,8 @@ def test_driver_risk_percentage():
     config = ConfigManager()
     manager = DriverManager(config)
     
-    # Test with NVIDIA GPU
-    fake_gpu = {
-        'type': 'GPU',
-        'vendor': 'NVIDIA',
-        'name': 'Test GPU'
-    }
-    
-    drivers = manager.find_drivers(fake_gpu)
+    # Use test fixture
+    drivers = manager.find_drivers(FAKE_NVIDIA_GPU)
     assert len(drivers) > 0, "Should find drivers"
     
     for driver in drivers:
@@ -77,9 +75,10 @@ def test_driver_risk_percentage():
         assert driver['risk_percentage'] >= 0, "Risk percentage should be >= 0"
         assert driver['risk_percentage'] <= 100, "Risk percentage should be <= 100"
         
-        # Official stable drivers should have low risk
+        # Official stable drivers should have low risk (use constant)
         if driver.get('source') == 'official' and driver.get('stability') == 'stable':
-            assert driver['risk_percentage'] <= 10, f"Official stable driver should have low risk, got {driver['risk_percentage']}%"
+            assert driver['risk_percentage'] <= RISK_OFFICIAL_STABLE, \
+                f"Official stable driver should have risk <= {RISK_OFFICIAL_STABLE}%, got {driver['risk_percentage']}%"
     
     print("✓ Driver risk percentage test passed")
 
