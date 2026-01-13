@@ -9,8 +9,9 @@ from PyQt6.QtWidgets import (
     QProgressBar, QComboBox, QMessageBox, QScrollArea,
     QProgressDialog, QCheckBox, QLineEdit, QSplitter, QTextBrowser
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor
+from datetime import datetime, timedelta
 
 
 # Risk assessment thresholds
@@ -37,12 +38,22 @@ class DriverInstallWorker(QThread):
         try:
             self.progress.emit(10, "Preparing installation...")
             
-            # Pre-installation risk assessment
-            self.progress.emit(20, "Assessing risks...")
-            risk = self.ai_manager.assess_risk(self.hardware, self.driver)
+            # Check if driver is from a trusted source
+            driver_source = self.driver.get('source', '').lower()
+            is_trusted_source = driver_source in ['official', 'distribution']
             
-            if risk['risk_percentage'] > RISK_HIGH_THRESHOLD:
-                self.progress.emit(25, f"High risk detected: {risk['risk_percentage']}%")
+            if is_trusted_source:
+                # For trusted sources, proceed immediately without waiting for risk assessment
+                self.progress.emit(20, f"Trusted source detected ({driver_source}), proceeding with installation...")
+                # Risk assessment can still run in background for logging, but don't wait for it
+                risk = None
+            else:
+                # For non-trusted sources, perform risk assessment first
+                self.progress.emit(20, "Assessing risks...")
+                risk = self.ai_manager.assess_risk(self.hardware, self.driver)
+                
+                if risk['risk_percentage'] > RISK_HIGH_THRESHOLD:
+                    self.progress.emit(25, f"High risk detected: {risk['risk_percentage']}%")
             
             # Install driver
             self.progress.emit(50, f"Installing {self.driver['name']}...")
@@ -80,6 +91,21 @@ class DeviceTab(QWidget):
         self.chat_enabled = False
         self.chat_history = []
         self.monitored_operations = []
+        
+        # Initialize driver converter
+        from ai.driver_converter import DriverConverter
+        self.driver_converter = DriverConverter(config_manager, ai_manager)
+        
+        # Initialize backup manager and test timer
+        from utils.driver_backup import DriverBackupManager
+        from utils.driver_test_timer import DriverTestTimer
+        from utils.driver_stress_test import DriverStressTest
+        self.backup_manager = DriverBackupManager()
+        self.test_timer = DriverTestTimer(test_duration_minutes=5)
+        self.stress_tester = DriverStressTest(hardware)
+        self.current_backup_path = None
+        self.pending_driver = None
+        self.stress_test_running = False
         
         self.init_ui()
         self.load_drivers()
@@ -482,7 +508,7 @@ class DeviceTab(QWidget):
         group = QGroupBox("Available Drivers")
         layout = QVBoxLayout()
         
-        # Filter by source
+        # Filter by source and OS
         filter_layout = QHBoxLayout()
         filter_label = QLabel("Filter by source:")
         filter_layout.addWidget(filter_label)
@@ -491,16 +517,27 @@ class DeviceTab(QWidget):
         self.source_filter.addItems(["All", "Official", "Distribution", "Community"])
         self.source_filter.currentTextChanged.connect(self.filter_drivers)
         filter_layout.addWidget(self.source_filter)
+        
+        # Add checkbox for cross-OS drivers
+        self.show_cross_os_checkbox = QCheckBox("Show Windows/Other OS drivers")
+        self.show_cross_os_checkbox.setToolTip(
+            "Include drivers for Windows and other operating systems.\n"
+            "These can be downloaded for compatibility research and analysis."
+        )
+        self.show_cross_os_checkbox.stateChanged.connect(self.toggle_cross_os_drivers)
+        filter_layout.addWidget(self.show_cross_os_checkbox)
+        
         filter_layout.addStretch()
         
         layout.addLayout(filter_layout)
         
-        # Drivers table
+        # Drivers table (now with OS column)
         self.drivers_table = QTableWidget()
-        self.drivers_table.setColumnCount(7)
-        self.drivers_table.setHorizontalHeaderLabels([
-            "Driver", "Version", "Source", "Stability", "Risk %", "Source Status", "Actions"
-        ])
+        header_labels = [
+            "Driver", "Version", "Source", "Target OS", "Stability", "Risk %", "Source Status", "Actions"
+        ]
+        self.drivers_table.setColumnCount(len(header_labels))
+        self.drivers_table.setHorizontalHeaderLabels(header_labels)
         self.drivers_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.drivers_table)
         
@@ -661,10 +698,16 @@ Estimated Recovery Time: 2-5 minutes"""
     def load_drivers(self):
         """Load available drivers for this device"""
         try:
-            self.available_drivers = self.driver_manager.find_drivers(self.hardware)
+            # Check if cross-OS drivers should be included
+            include_cross_os = self.show_cross_os_checkbox.isChecked() if hasattr(self, 'show_cross_os_checkbox') else False
+            self.available_drivers = self.driver_manager.find_drivers(self.hardware, include_cross_os=include_cross_os)
             self.update_drivers_table()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load drivers: {e}")
+    
+    def toggle_cross_os_drivers(self):
+        """Toggle cross-OS driver visibility"""
+        self.load_drivers()
     
     def update_drivers_table(self):
         """Update the drivers table"""
@@ -694,6 +737,25 @@ Estimated Recovery Time: 2-5 minutes"""
                 source_item.setBackground(QColor(50, 100, 50))
             self.drivers_table.setItem(i, 2, source_item)
             
+            # Target OS (NEW COLUMN)
+            target_os = driver.get('target_os', 'linux').upper()
+            os_item = QTableWidgetItem(target_os)
+            if target_os.lower() == 'linux':
+                os_item.setBackground(QColor(50, 100, 50))
+                os_item.setForeground(QColor(200, 255, 200))
+            elif target_os.lower() == 'windows':
+                os_item.setBackground(QColor(50, 50, 100))
+                os_item.setForeground(QColor(200, 200, 255))
+            else:
+                os_item.setBackground(QColor(100, 100, 100))
+            
+            # Add tooltip for cross-OS drivers
+            if target_os.lower() != 'linux':
+                compatibility_note = driver.get('compatibility_note', 'Cross-platform driver')
+                os_item.setToolTip(compatibility_note)
+            
+            self.drivers_table.setItem(i, 3, os_item)
+            
             # Stability
             stability = driver.get('stability', 'unknown')
             stability_item = QTableWidgetItem(stability)
@@ -701,9 +763,9 @@ Estimated Recovery Time: 2-5 minutes"""
                 stability_item.setBackground(QColor(50, 100, 50))
             elif stability == 'beta':
                 stability_item.setBackground(QColor(100, 100, 50))
-            self.drivers_table.setItem(i, 3, stability_item)
+            self.drivers_table.setItem(i, 4, stability_item)
             
-            # Risk percentage (mock for now)
+            # Risk percentage
             risk = driver.get('risk_percentage', 5)
             risk_item = QTableWidgetItem(f"{risk}%")
             if risk < 10:
@@ -712,9 +774,9 @@ Estimated Recovery Time: 2-5 minutes"""
                 risk_item.setBackground(QColor(100, 100, 50))
             else:
                 risk_item.setBackground(QColor(100, 50, 50))
-            self.drivers_table.setItem(i, 4, risk_item)
+            self.drivers_table.setItem(i, 5, risk_item)
             
-            # Source connectivity status (NEW)
+            # Source connectivity status
             source_connected = driver.get('source_connected', True)
             source_url = driver.get('source_url', 'N/A')
             if source_connected:
@@ -725,12 +787,39 @@ Estimated Recovery Time: 2-5 minutes"""
                 status_item = QTableWidgetItem("○ Offline")
                 status_item.setForeground(QColor(255, 100, 100))
                 status_item.setToolTip(f"Cannot connect to: {source_url}")
-            self.drivers_table.setItem(i, 5, status_item)
+            self.drivers_table.setItem(i, 6, status_item)
             
-            # Install button
-            install_btn = QPushButton("Install with AI")
-            install_btn.clicked.connect(lambda checked, d=driver: self.install_driver(d))
-            self.drivers_table.setCellWidget(i, 6, install_btn)
+            # Install/Download/Convert buttons
+            target_os = driver.get('target_os', 'linux').lower()
+            download_only = driver.get('download_only', False)
+            
+            # Create button container with layout
+            button_widget = QWidget()
+            button_layout = QHBoxLayout(button_widget)
+            button_layout.setContentsMargins(2, 2, 2, 2)
+            button_layout.setSpacing(4)
+            
+            if target_os == 'linux' and not download_only:
+                # Linux driver - Install button only
+                action_btn = QPushButton("Install with AI")
+                action_btn.clicked.connect(lambda checked, d=driver: self.install_driver(d))
+                button_layout.addWidget(action_btn)
+            else:
+                # Cross-OS driver - Download and Convert buttons
+                download_btn = QPushButton("Download")
+                download_btn.setToolTip(f"Download {target_os.upper()} driver for analysis")
+                download_btn.clicked.connect(lambda checked, d=driver: self.download_driver(d))
+                download_btn.setStyleSheet("background-color: #3a5a7a;")
+                button_layout.addWidget(download_btn)
+                
+                # Add Convert button for cross-OS drivers
+                convert_btn = QPushButton("Convert to Linux")
+                convert_btn.setToolTip(f"Use AI to convert {target_os.upper()} driver to Linux")
+                convert_btn.clicked.connect(lambda checked, d=driver: self.convert_driver(d))
+                convert_btn.setStyleSheet("background-color: #5a3a7a; font-weight: bold;")
+                button_layout.addWidget(convert_btn)
+            
+            self.drivers_table.setCellWidget(i, 7, button_widget)
     
     def filter_drivers(self):
         """Filter drivers by source"""
@@ -793,21 +882,97 @@ Estimated Recovery Time: 2-5 minutes"""
             self.ai_status_label.setStyleSheet("color: orange;")
     
     def install_driver(self, driver):
-        """Install a driver with AI assistance"""
-        reply = QMessageBox.question(
+        """Install a driver with AI assistance and safety features"""
+        # Check if driver is from a trusted source
+        driver_source = driver.get('source', '').lower()
+        is_trusted_source = driver_source in ['official', 'distribution']
+        
+        # Step 1: Create system backup
+        current_driver = self.driver_manager.get_current_driver(self.hardware)
+        
+        backup_confirmation = QMessageBox.question(
             self,
-            "Confirm Installation",
-            f"Install {driver['name']} ({driver['version']}) from {driver['source']}?\n\n"
-            f"AI-assisted installation will:\n"
-            f"• Assess risks before installation\n"
-            f"• Monitor installation in real-time\n"
-            f"• Automatically correct errors\n"
-            f"• Test driver after installation\n"
-            f"• Create automatic backup for rollback",
+            "⚠ Create System Backup",
+            f"Before installing {driver['name']}, create a backup?\n\n"
+            f"Current Driver: {current_driver.get('name', 'Unknown') if current_driver else 'None'}\n"
+            f"New Driver: {driver['name']} ({driver['version']})\n"
+            f"Source: {driver['source']}\n\n"
+            f"A backup will be saved to /root/driver-backups/\n"
+            f"This allows automatic rollback if installation fails.\n\n"
+            f"Create backup before proceeding?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if backup_confirmation == QMessageBox.StandardButton.Yes:
+            try:
+                self.current_backup_path = self.backup_manager.create_backup(
+                    self.hardware, 
+                    current_driver
+                )
+                QMessageBox.information(
+                    self,
+                    "✓ Backup Created",
+                    f"System backup created successfully:\n\n"
+                    f"{self.current_backup_path}\n\n"
+                    f"Backup includes:\n"
+                    f"• Hardware: {self.hardware.get('name')}\n"
+                    f"• Current Driver: {current_driver.get('name', 'Unknown') if current_driver else 'None'}\n"
+                    f"• Date/Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    f"This backup will be used for automatic rollback if needed."
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Backup Failed",
+                    f"Failed to create system backup:\n\n{str(e)}\n\n"
+                    f"Installation cannot proceed without backup for safety."
+                )
+                return
+        
+        # Step 2: Final confirmation with OK/Deny
+        # Build installation message based on source trust
+        if is_trusted_source:
+            install_message = (
+                f"⚠ FINAL CONFIRMATION - Install Driver?\n\n"
+                f"Driver: {driver['name']} ({driver['version']})\n"
+                f"Source: {driver['source']} (✓ Trusted)\n"
+                f"Hardware: {self.hardware.get('name')}\n\n"
+                f"{'Backup Created: ' + self.current_backup_path if self.current_backup_path else 'No Backup Created'}\n\n"
+                f"Installation Process:\n"
+                f"• Skip risk assessment (trusted source)\n"
+                f"• Monitor installation in real-time\n"
+                f"• Test driver for 5 minutes\n"
+                f"• Automatic rollback if test fails or times out\n"
+                f"• You must confirm driver is working within 5 minutes\n\n"
+                f"Click OK to proceed or Deny to cancel."
+            )
+        else:
+            install_message = (
+                f"⚠ FINAL CONFIRMATION - Install Driver?\n\n"
+                f"Driver: {driver['name']} ({driver['version']})\n"
+                f"Source: {driver['source']}\n"
+                f"Hardware: {self.hardware.get('name')}\n\n"
+                f"{'Backup Created: ' + self.current_backup_path if self.current_backup_path else 'No Backup Created'}\n\n"
+                f"Installation Process:\n"
+                f"• Assess risks before installation\n"
+                f"• Monitor installation in real-time\n"
+                f"• Test driver for 5 minutes\n"
+                f"• Automatic rollback if test fails or times out\n"
+                f"• You must confirm driver is working within 5 minutes\n\n"
+                f"Click OK to proceed or Deny to cancel."
+            )
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirm Installation - OK or Deny",
+            install_message,
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+        
+        if reply == QMessageBox.StandardButton.Ok:
+            # Store pending driver for timer
+            self.pending_driver = driver
+            
             # Create and start worker thread
             self.install_worker = DriverInstallWorker(
                 self.driver_manager,
@@ -828,11 +993,18 @@ Estimated Recovery Time: 2-5 minutes"""
             
             # Connect signals
             self.install_worker.progress.connect(self.update_install_progress)
-            self.install_worker.finished.connect(self.install_finished)
+            self.install_worker.finished.connect(self.install_finished_with_timer)
             
             # Start installation
             self.install_worker.start()
             self.progress_dialog.show()
+        else:
+            QMessageBox.information(
+                self,
+                "Installation Cancelled",
+                f"Driver installation cancelled by user.\n\n"
+                f"{'Backup will be retained for future use.' if self.current_backup_path else ''}"
+            )
     
     def update_install_progress(self, value, message):
         """Update installation progress"""
@@ -849,6 +1021,505 @@ Estimated Recovery Time: 2-5 minutes"""
             self.assess_risk()
         else:
             QMessageBox.critical(self, "Error", message)
+    
+    def install_finished_with_timer(self, success, message):
+        """Handle installation completion and start 5-minute test timer"""
+        self.progress_dialog.close()
+        
+        if success:
+            # Start 5-minute test timer
+            QMessageBox.information(
+                self,
+                "✓ Installation Complete - Test Period Started",
+                f"{message}\n\n"
+                f"⏱ 5-MINUTE TEST PERIOD STARTED\n\n"
+                f"The driver has been installed successfully.\n"
+                f"You now have 5 minutes to test the driver.\n\n"
+                f"What to test:\n"
+                f"• Basic hardware functionality\n"
+                f"• System stability\n"
+                f"• Performance\n"
+                f"• Any hardware-specific features\n\n"
+                f"⚠ IMPORTANT:\n"
+                f"• You MUST click 'Confirm Driver Works' within 5 minutes\n"
+                f"• If you don't confirm, the driver will be automatically reverted\n"
+                f"• If you experience issues, click 'Revert Driver Now'\n\n"
+                f"A test dialog will appear to track your testing."
+            )
+            
+            # Start test timer
+            self.test_timer.start_test_timer(
+                driver=self.pending_driver,
+                hardware=self.hardware,
+                on_timeout=self.on_test_timeout,
+                on_progress=self.on_test_progress
+            )
+            
+            # Show test confirmation dialog
+            self.show_test_timer_dialog()
+        else:
+            # Installation failed - offer to restore backup
+            if self.current_backup_path:
+                restore_reply = QMessageBox.question(
+                    self,
+                    "Installation Failed",
+                    f"{message}\n\n"
+                    f"Restore from backup?\n\n"
+                    f"Backup: {self.current_backup_path}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if restore_reply == QMessageBox.StandardButton.Yes:
+                    self.restore_from_backup()
+            else:
+                QMessageBox.critical(self, "Installation Failed", message)
+    
+    def show_test_timer_dialog(self):
+        """Show dialog for test timer with confirm/revert buttons and stress test option"""
+        self.timer_dialog = QMessageBox(self)
+        self.timer_dialog.setWindowTitle("Driver Test Period - 5 Minutes")
+        self.timer_dialog.setIcon(QMessageBox.Icon.Information)
+        
+        # Add custom buttons
+        confirm_btn = self.timer_dialog.addButton("✓ Confirm Driver Works", QMessageBox.ButtonRole.AcceptRole)
+        stress_test_btn = self.timer_dialog.addButton("⚡ Run Stress Test", QMessageBox.ButtonRole.ActionRole)
+        revert_btn = self.timer_dialog.addButton("✗ Revert Driver Now", QMessageBox.ButtonRole.RejectRole)
+        
+        # Create timer to update message
+        self.timer_update_timer = QTimer(self)
+        self.timer_update_timer.timeout.connect(self.update_timer_dialog_message)
+        self.timer_update_timer.start(1000)  # Update every second
+        
+        # Initial message
+        self.update_timer_dialog_message()
+        
+        # Show dialog and wait for response
+        self.timer_dialog.exec()
+        
+        # Stop update timer
+        self.timer_update_timer.stop()
+        
+        # Check which button was clicked
+        clicked_button = self.timer_dialog.clickedButton()
+        
+        if clicked_button == confirm_btn:
+            self.confirm_driver_works()
+        elif clicked_button == stress_test_btn:
+            # Start stress test
+            self.start_stress_test()
+        elif clicked_button == revert_btn:
+            self.revert_driver_now()
+    
+    def update_timer_dialog_message(self):
+        """Update the timer dialog message with remaining time and stress test status"""
+        if not self.test_timer.is_test_active():
+            if hasattr(self, 'timer_dialog'):
+                self.timer_dialog.close()
+            return
+        
+        minutes, seconds = self.test_timer.get_remaining_time()
+        elapsed_min, elapsed_sec = self.test_timer.get_elapsed_time()
+        
+        # Build message with stress test status if running
+        stress_status = ""
+        if self.stress_test_running:
+            results = self.stress_tester.get_results()
+            summary = results.get('summary', {})
+            stress_status = (
+                f"\n⚡ STRESS TEST RUNNING\n"
+                f"Level: {results.get('stress_level', 'unknown').upper()}\n"
+                f"Tests Performed: {summary.get('total_tests', 0)}\n"
+                f"Passed: {summary.get('passed_tests', 0)} | "
+                f"Failed: {summary.get('failed_tests', 0)}\n"
+                f"Success Rate: {summary.get('success_rate', 0):.1f}%\n"
+            )
+        
+        message = (
+            f"⏱ DRIVER TEST PERIOD\n\n"
+            f"Testing: {self.pending_driver.get('name', 'Unknown')} ({self.pending_driver.get('version', 'Unknown')})\n"
+            f"Hardware: {self.hardware.get('name', 'Unknown')}\n\n"
+            f"Time Elapsed: {elapsed_min}m {elapsed_sec}s\n"
+            f"Time Remaining: {minutes}m {seconds}s\n"
+            f"{stress_status}\n"
+            f"{'Basic Testing:' if not self.stress_test_running else 'Manual Testing:'}\n"
+            f"✓ Basic hardware functionality\n"
+            f"✓ System stability\n"
+            f"✓ Performance\n"
+            f"✓ Hardware-specific features\n\n"
+            f"{'⚡ Click \"Run Stress Test\" for heavy load simulation\n\n' if not self.stress_test_running else ''}"
+            f"⚠ If timer expires without confirmation,\n"
+            f"   the driver will be automatically reverted!"
+        )
+        
+        if hasattr(self, 'timer_dialog'):
+            self.timer_dialog.setText(message)
+    
+    def confirm_driver_works(self):
+        """User confirms driver is working correctly"""
+        if self.test_timer.confirm_test_passed():
+            QMessageBox.information(
+                self,
+                "✓ Driver Confirmed",
+                f"Driver {self.pending_driver.get('name')} confirmed as working!\n\n"
+                f"The driver installation is complete and verified.\n"
+                f"Backup has been retained in case you need to revert later.\n\n"
+                f"Backup location: {self.current_backup_path if self.current_backup_path else 'N/A'}"
+            )
+            
+            # Refresh driver info
+            self.assess_risk()
+        else:
+            QMessageBox.warning(
+                self,
+                "No Active Test",
+                "There is no active driver test to confirm."
+            )
+    
+    def revert_driver_now(self):
+        """User requests immediate driver revert"""
+        reply = QMessageBox.question(
+            self,
+            "⚠ Confirm Driver Revert",
+            f"Revert to previous driver configuration?\n\n"
+            f"This will restore the backup from:\n"
+            f"{self.current_backup_path if self.current_backup_path else 'Unknown'}\n\n"
+            f"Are you sure you want to revert?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.test_timer.cancel_test()
+            if self.stress_test_running:
+                self.stress_tester.stop_stress_test()
+                self.stress_test_running = False
+            self.restore_from_backup()
+    
+    def start_stress_test(self):
+        """Start heavy load stress test simulation for 15 minutes"""
+        if self.stress_test_running:
+            QMessageBox.warning(
+                self,
+                "Stress Test Running",
+                "A stress test is already running. Please wait for it to complete."
+            )
+            return
+        
+        # Confirm stress test
+        reply = QMessageBox.question(
+            self,
+            "⚡ Start Stress Test",
+            f"Start 15-minute HEAVY LOAD stress test?\n\n"
+            f"Driver: {self.pending_driver.get('name', 'Unknown')}\n"
+            f"Hardware: {self.hardware.get('name', 'Unknown')}\n\n"
+            f"This will simulate:\n"
+            f"• Extended period heavy load (15 minutes)\n"
+            f"• High concurrent operations\n"
+            f"• Memory stress testing\n"
+            f"• I/O intensive operations\n"
+            f"• Thermal and power management tests\n\n"
+            f"⚠ Note: This is a SIMULATED test in code\n"
+            f"   No actual hardware stress will occur\n\n"
+            f"The 5-minute timer will be extended to accommodate\n"
+            f"the full 15-minute stress test period.\n\n"
+            f"Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Extend timer for stress test (15 minutes + 2 minute buffer)
+        self.test_timer.test_duration_minutes = 17
+        self.test_timer.test_duration_seconds = 17 * 60
+        self.test_timer.test_end_time = datetime.now() + timedelta(minutes=17)
+        
+        QMessageBox.information(
+            self,
+            "⚡ Stress Test Started",
+            f"15-minute HEAVY LOAD stress test started!\n\n"
+            f"Test Configuration:\n"
+            f"• Duration: 15 minutes\n"
+            f"• Load Level: HEAVY\n"
+            f"• Test Type: Simulated (no hardware impact)\n"
+            f"• Extended Timer: 17 minutes total\n\n"
+            f"The test will run automatically.\n"
+            f"Real-time results will appear in the timer dialog.\n\n"
+            f"You can still confirm or revert the driver at any time."
+        )
+        
+        # Start stress test
+        self.stress_test_running = True
+        success = self.stress_tester.start_stress_test(
+            duration_seconds=900,  # 15 minutes
+            stress_level='heavy',
+            on_progress=self.on_stress_test_progress,
+            on_complete=self.on_stress_test_complete
+        )
+        
+        if not success:
+            self.stress_test_running = False
+            QMessageBox.critical(
+                self,
+                "Stress Test Failed",
+                "Failed to start stress test. Please try again."
+            )
+    
+    def on_stress_test_progress(self, test_name: str, status: str, elapsed_seconds: float):
+        """Called during stress test progress"""
+        # This is called frequently, so we just track it
+        # The timer dialog will poll for updates
+        pass
+    
+    def on_stress_test_complete(self, results: dict):
+        """Called when stress test completes"""
+        self.stress_test_running = False
+        
+        # Generate report
+        report = self.stress_tester.generate_report()
+        summary = results.get('summary', {})
+        
+        # Show completion message
+        QMessageBox.information(
+            self,
+            "⚡ Stress Test Complete",
+            f"15-minute HEAVY LOAD stress test completed!\n\n"
+            f"Results Summary:\n"
+            f"• Total Tests: {summary.get('total_tests', 0)}\n"
+            f"• Passed: {summary.get('passed_tests', 0)}\n"
+            f"• Failed: {summary.get('failed_tests', 0)}\n"
+            f"• Success Rate: {summary.get('success_rate', 0):.2f}%\n"
+            f"• Duration: {results.get('duration_seconds', 0):.1f} seconds\n\n"
+            f"Driver appears to be {'STABLE' if summary.get('success_rate', 0) >= 95 else 'UNSTABLE'} "
+            f"under heavy load.\n\n"
+            f"Full report has been logged.\n\n"
+            f"You can now confirm the driver or revert if needed."
+        )
+        
+        # Log the report
+        print(report)
+    
+    def on_test_timeout(self, driver, hardware):
+        """Called when test timer expires without confirmation"""
+        print(f"⏰ Test timer expired for {driver.get('name')}")
+        
+        # Close timer dialog if open
+        if hasattr(self, 'timer_dialog'):
+            self.timer_dialog.close()
+        
+        # Show timeout message
+        QMessageBox.warning(
+            self,
+            "⏰ Test Period Expired",
+            f"The 5-minute test period has expired without confirmation.\n\n"
+            f"Driver: {driver.get('name')}\n"
+            f"Hardware: {hardware.get('name')}\n\n"
+            f"The driver will now be reverted to the previous configuration\n"
+            f"for safety reasons.\n\n"
+            f"You can try installing the driver again and confirm it works\n"
+            f"within the 5-minute test period."
+        )
+        
+        # Restore from backup
+        self.restore_from_backup()
+    
+    def on_test_progress(self, elapsed_seconds, remaining_seconds):
+        """Called periodically during test period"""
+        # This is called every 10 seconds - could be used for logging
+        pass
+    
+    def restore_from_backup(self):
+        """Restore driver from backup"""
+        if not self.current_backup_path:
+            QMessageBox.critical(
+                self,
+                "No Backup Available",
+                "Cannot restore: No backup file available."
+            )
+            return
+        
+        try:
+            success = self.backup_manager.restore_from_backup(
+                self.current_backup_path,
+                self.driver_manager
+            )
+            
+            if success:
+                QMessageBox.information(
+                    self,
+                    "✓ Driver Restored",
+                    f"Driver successfully restored from backup!\n\n"
+                    f"Backup: {self.current_backup_path}\n\n"
+                    f"Your system has been restored to the previous\n"
+                    f"driver configuration."
+                )
+                
+                # Refresh driver info
+                self.assess_risk()
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Restore Failed",
+                    f"Failed to restore driver from backup.\n\n"
+                    f"Backup: {self.current_backup_path}\n\n"
+                    f"You may need to manually revert the driver."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Restore Error",
+                f"Error restoring from backup:\n\n{str(e)}"
+            )
+    
+    def download_driver(self, driver):
+        """Download a cross-OS driver for analysis"""
+        target_os = driver.get('target_os', 'unknown').upper()
+        
+        reply = QMessageBox.question(
+            self,
+            "Download Cross-OS Driver",
+            f"Download {driver['name']} ({driver['version']}) for {target_os}?\n\n"
+            f"⚠ This is a {target_os} driver and cannot be directly installed on Linux.\n\n"
+            f"Purpose: Download for compatibility research and analysis.\n"
+            f"Use case: Examining driver structure, understanding hardware interfaces,\n"
+            f"          or researching compatibility approaches.\n\n"
+            f"The driver will be saved to: ~/Downloads/cross-os-drivers/",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            QMessageBox.information(
+                self,
+                "Download Started",
+                f"Downloading {target_os} driver: {driver['name']}\n\n"
+                f"Source: {driver.get('source_url', 'N/A')}\n"
+                f"Destination: ~/Downloads/cross-os-drivers/\n\n"
+                f"Note: This is a placeholder. Actual download functionality\n"
+                f"would be implemented with proper file handling and verification."
+            )
+    
+    def convert_driver(self, driver):
+        """Convert a cross-OS driver to Linux using AI"""
+        target_os = driver.get('target_os', 'unknown').upper()
+        
+        # Show warning and get confirmation
+        reply = QMessageBox.question(
+            self,
+            "AI Driver Conversion (Experimental)",
+            f"⚠ EXPERIMENTAL FEATURE ⚠\n\n"
+            f"Attempt to convert {driver['name']} ({target_os}) to Linux?\n\n"
+            f"Process:\n"
+            f"1. AI will analyze the {target_os} driver structure\n"
+            f"2. Determine conversion feasibility\n"
+            f"3. Generate equivalent Linux driver code\n"
+            f"4. Provide testing recommendations\n\n"
+            f"⚠ Important Warnings:\n"
+            f"• This is highly experimental and may not succeed\n"
+            f"• Generated driver will require extensive testing\n"
+            f"• May not include all original features\n"
+            f"• Use only in safe/virtual environments\n"
+            f"• Not recommended for production systems\n\n"
+            f"Continue with conversion attempt?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Create progress dialog
+        progress_dialog = QProgressDialog(
+            "Analyzing driver for conversion...",
+            "Cancel",
+            0, 100,
+            self
+        )
+        progress_dialog.setWindowTitle("AI Driver Conversion")
+        progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dialog.show()
+        
+        try:
+            # Step 1: Analyze driver (30%)
+            progress_dialog.setValue(10)
+            progress_dialog.setLabelText(f"Analyzing {target_os} driver structure...")
+            
+            analysis = self.driver_converter.analyze_driver(driver, self.hardware)
+            
+            progress_dialog.setValue(30)
+            progress_dialog.setLabelText("Analysis complete. Checking feasibility...")
+            
+            # Show analysis results
+            if not analysis.get('feasible'):
+                progress_dialog.close()
+                QMessageBox.warning(
+                    self,
+                    "Conversion Not Feasible",
+                    f"AI analysis determined this driver cannot be converted.\n\n"
+                    f"Confidence: {analysis.get('confidence', 0)}%\n"
+                    f"Complexity: {analysis.get('complexity', 'unknown')}\n\n"
+                    f"Potential Issues:\n" +
+                    "\n".join(f"• {issue}" for issue in analysis.get('potential_issues', [])) +
+                    f"\n\nRecommendations:\n" +
+                    "\n".join(f"• {rec}" for rec in analysis.get('recommendations', []))
+                )
+                return
+            
+            # Step 2: Attempt conversion (70%)
+            progress_dialog.setValue(40)
+            progress_dialog.setLabelText(f"Generating Linux driver code...")
+            
+            conversion_result = self.driver_converter.attempt_conversion(
+                driver, self.hardware, analysis
+            )
+            
+            progress_dialog.setValue(90)
+            progress_dialog.setLabelText("Finalizing conversion...")
+            
+            progress_dialog.setValue(100)
+            progress_dialog.close()
+            
+            # Show results
+            if conversion_result.get('success'):
+                converted_driver = conversion_result.get('converted_driver')
+                
+                # Add converted driver to available drivers list
+                if converted_driver:
+                    self.available_drivers.append(converted_driver)
+                    self.update_drivers_table()
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "Conversion Successful!",
+                    f"✓ AI successfully converted {driver['name']} to Linux!\n\n"
+                    f"Converted Driver: {converted_driver.get('name', 'Unknown')}\n"
+                    f"Version: {converted_driver.get('version', 'Unknown')}\n"
+                    f"Status: {converted_driver.get('stability', 'experimental')}\n"
+                    f"Risk: {converted_driver.get('risk_percentage', 75)}% (Experimental)\n\n"
+                    f"⚠ Important:\n" +
+                    "\n".join(f"• {warn}" for warn in conversion_result.get('warnings', [])) +
+                    f"\n\nNext Steps:\n" +
+                    "\n".join(f"• {step}" for step in conversion_result.get('next_steps', [])) +
+                    f"\n\nThe converted driver is now available in the drivers list."
+                )
+            else:
+                # Show failure message
+                QMessageBox.warning(
+                    self,
+                    "Conversion Failed",
+                    f"✗ AI could not convert {driver['name']} to Linux.\n\n"
+                    f"Conversion Log:\n" +
+                    "\n".join(f"• {log}" for log in conversion_result.get('conversion_log', [])) +
+                    f"\n\nWarnings:\n" +
+                    "\n".join(f"• {warn}" for warn in conversion_result.get('warnings', []))
+                )
+        
+        except Exception as e:
+            progress_dialog.close()
+            QMessageBox.critical(
+                self,
+                "Conversion Error",
+                f"An error occurred during conversion:\n\n{str(e)}\n\n"
+                f"Please check AI assistant status and try again."
+            )
     
     def test_current_driver(self):
         """Test current driver"""

@@ -130,6 +130,32 @@ class MainWindow(QMainWindow):
         # Action buttons
         button_layout = QHBoxLayout()
         
+        # Run All Tests button (prominent)
+        run_all_tests_btn = QPushButton("⚡ Run All Tests (AI Simulation)")
+        run_all_tests_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        run_all_tests_btn.setToolTip(
+            "Run comprehensive tests on all devices:\n"
+            "• AI virtual kernel simulation (no hardware impact)\n"
+            "• Automatic conversion of Windows/macOS drivers to Debian Linux\n"
+            "• Stress testing under simulated load\n"
+            "• Completely safe - all operations simulated"
+        )
+        run_all_tests_btn.clicked.connect(self.run_all_tests)
+        button_layout.addWidget(run_all_tests_btn)
+        
+        button_layout.addSpacing(20)
+        
         update_btn = QPushButton("Update Driver")
         update_btn.clicked.connect(self.update_driver)
         button_layout.addWidget(update_btn)
@@ -333,6 +359,35 @@ class MainWindow(QMainWindow):
         
         # Open the device tab for selected hardware
         self.open_device_tab(current_row, 0)
+    
+    def run_all_tests(self):
+        """Run comprehensive tests on all devices with AI simulation"""
+        if not self.detected_hardware:
+            QMessageBox.information(
+                self,
+                "No Hardware Detected",
+                "No hardware devices detected. Please run 'Scan Hardware' first."
+            )
+            return
+        
+        # Import the run all tests dialog
+        from gui.run_all_tests_dialog import RunAllTestsDialog
+        
+        # Create devices dictionary
+        devices = {}
+        for hardware in self.detected_hardware:
+            device_name = f"{hardware.get('type', 'Unknown')}: {hardware.get('name', 'Unknown')}"
+            devices[device_name] = hardware
+        
+        # Show the dialog
+        dialog = RunAllTestsDialog(
+            devices,
+            self.driver_manager,
+            self.ai_manager,
+            self.config,
+            self
+        )
+        dialog.exec()
     
     def apply_theme(self):
         """Apply dark theme"""
