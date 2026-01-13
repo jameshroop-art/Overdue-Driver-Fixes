@@ -46,8 +46,8 @@ class DriverBackupManager:
             }
         
         # Create backup filename
-        driver_name = current_driver.get('name', 'unknown').replace('/', '_')
-        hardware_name = hardware.get('name', 'unknown').replace('/', '_').replace(' ', '_')
+        driver_name = (current_driver.get('name') or 'unknown').replace('/', '_')
+        hardware_name = (hardware.get('name') or 'unknown').replace('/', '_').replace(' ', '_')
         backup_filename = f"{hardware_name}_{driver_name}_{timestamp}.json"
         backup_path = self.backup_dir / backup_filename
         
@@ -90,7 +90,7 @@ class DriverBackupManager:
         Returns:
             Backup data or None if no backup exists
         """
-        hardware_name = hardware.get('name', 'unknown').replace('/', '_').replace(' ', '_')
+        hardware_name = (hardware.get('name') or 'unknown').replace('/', '_').replace(' ', '_')
         
         # Find all backups for this hardware
         backups = sorted(
@@ -149,7 +149,7 @@ class DriverBackupManager:
             List of backup file paths
         """
         if hardware:
-            hardware_name = hardware.get('name', 'unknown').replace('/', '_').replace(' ', '_')
+            hardware_name = (hardware.get('name') or 'unknown').replace('/', '_').replace(' ', '_')
             pattern = f"{hardware_name}_*.json"
         else:
             pattern = "*.json"
