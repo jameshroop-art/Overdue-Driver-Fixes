@@ -27,7 +27,7 @@ setup(
         'requests>=2.28.0',
         'pyyaml>=6.0',
     ],
-    scripts=['driver-mgt'],
+    scripts=['driver-mgt', 'driver-mgt.py'],
     package_data={
         '': ['*.json', '*.template'],
     },

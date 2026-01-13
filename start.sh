@@ -26,12 +26,14 @@ if [ -d "$SCRIPT_DIR/src" ] && [ -f "$SCRIPT_DIR/driver-mgt" ]; then
     INSTALL_DIR="$SCRIPT_DIR"
     VENV_DIR="$SCRIPT_DIR/venv"
     DRIVER_MGT_BIN="$SCRIPT_DIR/driver-mgt"
+    DRIVER_MGT_PY="$SCRIPT_DIR/driver-mgt.py"
     MODE="development"
 else
     # Try installed location
     INSTALL_DIR="/opt/driver-mgt"
     VENV_DIR="/opt/driver-mgt/venv"
     DRIVER_MGT_BIN="/opt/driver-mgt/driver-mgt"
+    DRIVER_MGT_PY="/opt/driver-mgt/driver-mgt.py"
     MODE="installed"
 fi
 
@@ -54,93 +56,28 @@ if [ ! -f "$DRIVER_MGT_BIN" ]; then
     exit 1
 fi
 
-# Check if virtual environment exists
-if [ ! -d "$VENV_DIR" ]; then
-    echo -e "${YELLOW}Virtual environment not found at: $VENV_DIR${NC}"
+# Check if driver-mgt.py exists
+if [ ! -f "$DRIVER_MGT_PY" ]; then
+    echo -e "${RED}Error: driver-mgt.py not found${NC}"
     echo ""
-    
-    if [ "$MODE" = "development" ]; then
-        echo "Creating virtual environment for development..."
-        
-        # Check if python3-venv is installed
-        if ! python3 -m venv --help >/dev/null 2>&1; then
-            echo -e "${RED}Error: python3-venv is not installed${NC}"
-            echo ""
-            echo "Install it with:"
-            echo "  Debian/Ubuntu: sudo apt-get install python3-venv"
-            echo "  Fedora: sudo dnf install python3"
-            echo "  Arch: sudo pacman -S python"
-            echo ""
-            exit 1
-        fi
-        
-        # Create venv
-        echo "Creating virtual environment..."
-        if ! python3 -m venv "$VENV_DIR"; then
-            echo -e "${RED}Failed to create virtual environment${NC}"
-            exit 1
-        fi
-        
-        echo -e "${GREEN}✓ Virtual environment created${NC}"
-        echo ""
-        
-        # Install dependencies
-        echo "Installing dependencies from requirements.txt..."
-        if ! "$VENV_DIR/bin/pip" install --upgrade pip; then
-            echo -e "${RED}Failed to upgrade pip${NC}"
-            exit 1
-        fi
-        
-        if ! "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt"; then
-            echo -e "${RED}Failed to install dependencies${NC}"
-            exit 1
-        fi
-        
-        echo -e "${GREEN}✓ Dependencies installed${NC}"
-        echo ""
-    else
-        echo -e "${RED}Please run the installation script first:${NC}"
-        echo "  sudo bash install.sh"
-        echo ""
-        exit 1
-    fi
-fi
-
-# Verify Python exists in venv
-if [ ! -f "$VENV_DIR/bin/python" ]; then
-    echo -e "${RED}Error: Python not found in virtual environment${NC}"
-    echo "Expected: $VENV_DIR/bin/python"
-    echo ""
-    echo "Try recreating the virtual environment."
+    echo "The Python script is missing. Please reinstall."
     exit 1
 fi
 
-# Check dependencies (extracted from requirements.txt for single source of truth)
-echo -e "${BLUE}Checking dependencies...${NC}"
-MISSING_DEPS=0
-
-# Map requirements.txt package names to Python import names
-declare -A IMPORT_MAP=(
-    ["PyQt6"]="PyQt6"
-    ["psutil"]="psutil"
-    ["requests"]="requests"
-    ["pyyaml"]="yaml"
-)
-
-# Check each dependency
-for dep in PyQt6 psutil requests yaml; do
-    if ! "$VENV_DIR/bin/python" -c "import $dep" 2>/dev/null; then
-        echo -e "${RED}✗ $dep (missing)${NC}"
-        MISSING_DEPS=1
-    else
-        echo -e "${GREEN}✓ $dep${NC}"
-    fi
-done
-
-if [ $MISSING_DEPS -eq 1 ]; then
+# Check if virtual environment exists (for information only, wrapper handles activation)
+if [ ! -d "$VENV_DIR" ]; then
+    echo -e "${YELLOW}Note: Virtual environment not found at: $VENV_DIR${NC}"
     echo ""
-    echo -e "${YELLOW}Some dependencies are missing. Installing...${NC}"
-    "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
+    
+    if [ "$MODE" = "development" ]; then
+        echo "The driver-mgt wrapper will handle venv setup automatically."
+        echo "If you encounter issues, create it manually with:"
+        echo "  python3 -m venv $VENV_DIR"
+        echo "  $VENV_DIR/bin/pip install -r requirements.txt"
+    else
+        echo "Please run the installation script first:"
+        echo "  sudo bash install.sh"
+    fi
     echo ""
 fi
 
@@ -165,17 +102,14 @@ echo ""
 echo -e "${BLUE}Starting driver-mgt...${NC}"
 echo ""
 
-# Run driver-mgt with venv Python
-cd "$INSTALL_DIR"
-
 # Check if running with sudo/root
 if [ "$EUID" -eq 0 ]; then
     echo -e "${YELLOW}Running with elevated privileges${NC}"
     echo ""
 fi
 
-# Execute driver-mgt
-"$VENV_DIR/bin/python" "$DRIVER_MGT_BIN" "${ARGS[@]}"
+# Execute driver-mgt (wrapper handles venv activation automatically)
+"$DRIVER_MGT_BIN" "${ARGS[@]}"
 
 EXIT_CODE=$?
 

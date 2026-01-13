@@ -2,6 +2,7 @@ include README.md
 include LICENSE
 include requirements.txt
 include driver-mgt
+include driver-mgt.py
 recursive-include config *.json.template
 recursive-include src *.py
 recursive-include docs *.md
