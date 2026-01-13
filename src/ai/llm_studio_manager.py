@@ -71,7 +71,7 @@ class LLMStudioManager:
                     self.active_port = port
                     self.base_url = f"http://{self.host}:{port}"
                     return True
-            except:
+            except (requests.RequestException, OSError):
                 continue
         
         # No instance found, default to primary port
