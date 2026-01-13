@@ -492,7 +492,7 @@ class DeviceTab(QWidget):
         group = QGroupBox("Available Drivers")
         layout = QVBoxLayout()
         
-        # Filter by source
+        # Filter by source and OS
         filter_layout = QHBoxLayout()
         filter_label = QLabel("Filter by source:")
         filter_layout.addWidget(filter_label)
@@ -501,15 +501,25 @@ class DeviceTab(QWidget):
         self.source_filter.addItems(["All", "Official", "Distribution", "Community"])
         self.source_filter.currentTextChanged.connect(self.filter_drivers)
         filter_layout.addWidget(self.source_filter)
+        
+        # Add checkbox for cross-OS drivers
+        self.show_cross_os_checkbox = QCheckBox("Show Windows/Other OS drivers")
+        self.show_cross_os_checkbox.setToolTip(
+            "Include drivers for Windows and other operating systems.\n"
+            "These can be downloaded for compatibility research and analysis."
+        )
+        self.show_cross_os_checkbox.stateChanged.connect(self.toggle_cross_os_drivers)
+        filter_layout.addWidget(self.show_cross_os_checkbox)
+        
         filter_layout.addStretch()
         
         layout.addLayout(filter_layout)
         
-        # Drivers table
+        # Drivers table (now with OS column)
         self.drivers_table = QTableWidget()
-        self.drivers_table.setColumnCount(7)
+        self.drivers_table.setColumnCount(8)
         self.drivers_table.setHorizontalHeaderLabels([
-            "Driver", "Version", "Source", "Stability", "Risk %", "Source Status", "Actions"
+            "Driver", "Version", "Source", "Target OS", "Stability", "Risk %", "Source Status", "Actions"
         ])
         self.drivers_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.drivers_table)
@@ -671,10 +681,16 @@ Estimated Recovery Time: 2-5 minutes"""
     def load_drivers(self):
         """Load available drivers for this device"""
         try:
-            self.available_drivers = self.driver_manager.find_drivers(self.hardware)
+            # Check if cross-OS drivers should be included
+            include_cross_os = self.show_cross_os_checkbox.isChecked() if hasattr(self, 'show_cross_os_checkbox') else False
+            self.available_drivers = self.driver_manager.find_drivers(self.hardware, include_cross_os=include_cross_os)
             self.update_drivers_table()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load drivers: {e}")
+    
+    def toggle_cross_os_drivers(self):
+        """Toggle cross-OS driver visibility"""
+        self.load_drivers()
     
     def update_drivers_table(self):
         """Update the drivers table"""
@@ -704,6 +720,25 @@ Estimated Recovery Time: 2-5 minutes"""
                 source_item.setBackground(QColor(50, 100, 50))
             self.drivers_table.setItem(i, 2, source_item)
             
+            # Target OS (NEW COLUMN)
+            target_os = driver.get('target_os', 'linux').upper()
+            os_item = QTableWidgetItem(target_os)
+            if target_os.lower() == 'linux':
+                os_item.setBackground(QColor(50, 100, 50))
+                os_item.setForeground(QColor(200, 255, 200))
+            elif target_os.lower() == 'windows':
+                os_item.setBackground(QColor(50, 50, 100))
+                os_item.setForeground(QColor(200, 200, 255))
+            else:
+                os_item.setBackground(QColor(100, 100, 100))
+            
+            # Add tooltip for cross-OS drivers
+            if target_os.lower() != 'linux':
+                compatibility_note = driver.get('compatibility_note', 'Cross-platform driver')
+                os_item.setToolTip(compatibility_note)
+            
+            self.drivers_table.setItem(i, 3, os_item)
+            
             # Stability
             stability = driver.get('stability', 'unknown')
             stability_item = QTableWidgetItem(stability)
@@ -711,9 +746,9 @@ Estimated Recovery Time: 2-5 minutes"""
                 stability_item.setBackground(QColor(50, 100, 50))
             elif stability == 'beta':
                 stability_item.setBackground(QColor(100, 100, 50))
-            self.drivers_table.setItem(i, 3, stability_item)
+            self.drivers_table.setItem(i, 4, stability_item)
             
-            # Risk percentage (mock for now)
+            # Risk percentage
             risk = driver.get('risk_percentage', 5)
             risk_item = QTableWidgetItem(f"{risk}%")
             if risk < 10:
@@ -722,9 +757,9 @@ Estimated Recovery Time: 2-5 minutes"""
                 risk_item.setBackground(QColor(100, 100, 50))
             else:
                 risk_item.setBackground(QColor(100, 50, 50))
-            self.drivers_table.setItem(i, 4, risk_item)
+            self.drivers_table.setItem(i, 5, risk_item)
             
-            # Source connectivity status (NEW)
+            # Source connectivity status
             source_connected = driver.get('source_connected', True)
             source_url = driver.get('source_url', 'N/A')
             if source_connected:
@@ -735,12 +770,22 @@ Estimated Recovery Time: 2-5 minutes"""
                 status_item = QTableWidgetItem("○ Offline")
                 status_item.setForeground(QColor(255, 100, 100))
                 status_item.setToolTip(f"Cannot connect to: {source_url}")
-            self.drivers_table.setItem(i, 5, status_item)
+            self.drivers_table.setItem(i, 6, status_item)
             
-            # Install button
-            install_btn = QPushButton("Install with AI")
-            install_btn.clicked.connect(lambda checked, d=driver: self.install_driver(d))
-            self.drivers_table.setCellWidget(i, 6, install_btn)
+            # Install/Download button
+            target_os = driver.get('target_os', 'linux').lower()
+            download_only = driver.get('download_only', False)
+            
+            if target_os == 'linux' and not download_only:
+                action_btn = QPushButton("Install with AI")
+                action_btn.clicked.connect(lambda checked, d=driver: self.install_driver(d))
+            else:
+                action_btn = QPushButton("Download")
+                action_btn.setToolTip(f"Download {target_os.upper()} driver for analysis/compatibility research")
+                action_btn.clicked.connect(lambda checked, d=driver: self.download_driver(d))
+                action_btn.setStyleSheet("background-color: #3a5a7a;")
+            
+            self.drivers_table.setCellWidget(i, 7, action_btn)
     
     def filter_drivers(self):
         """Filter drivers by source"""
@@ -880,6 +925,33 @@ Estimated Recovery Time: 2-5 minutes"""
             self.assess_risk()
         else:
             QMessageBox.critical(self, "Error", message)
+    
+    def download_driver(self, driver):
+        """Download a cross-OS driver for analysis"""
+        target_os = driver.get('target_os', 'unknown').upper()
+        
+        reply = QMessageBox.question(
+            self,
+            "Download Cross-OS Driver",
+            f"Download {driver['name']} ({driver['version']}) for {target_os}?\n\n"
+            f"⚠ This is a {target_os} driver and cannot be directly installed on Linux.\n\n"
+            f"Purpose: Download for compatibility research and analysis.\n"
+            f"Use case: Examining driver structure, understanding hardware interfaces,\n"
+            f"          or researching compatibility approaches.\n\n"
+            f"The driver will be saved to: ~/Downloads/cross-os-drivers/",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            QMessageBox.information(
+                self,
+                "Download Started",
+                f"Downloading {target_os} driver: {driver['name']}\n\n"
+                f"Source: {driver.get('source_url', 'N/A')}\n"
+                f"Destination: ~/Downloads/cross-os-drivers/\n\n"
+                f"Note: This is a placeholder. Actual download functionality\n"
+                f"would be implemented with proper file handling and verification."
+            )
     
     def test_current_driver(self):
         """Test current driver"""

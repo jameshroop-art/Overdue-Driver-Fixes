@@ -24,13 +24,19 @@ DRIVER_SOURCES = {
         'official': 'https://developer.download.nvidia.com/compute/cuda/repos/',
         'ubuntu': 'ppa:graphics-drivers/ppa',
         'debian': 'https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/',
+        'windows': 'https://www.nvidia.com/Download/index.aspx',
+        'windows_direct': 'https://us.download.nvidia.com/Windows/',
     },
     'amd': {
         'official': 'https://repo.radeon.com/amdgpu-install/',
         'rocm': 'https://repo.radeon.com/rocm/apt/',
+        'windows': 'https://www.amd.com/en/support',
+        'windows_direct': 'https://drivers.amd.com/drivers/',
     },
     'intel': {
         'official': 'https://repositories.intel.com/graphics/',
+        'windows': 'https://www.intel.com/content/www/us/en/download-center/home.html',
+        'windows_direct': 'https://downloadmirror.intel.com/downloads/',
     },
     'wifi': {
         'linux-firmware': 'https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git',
@@ -123,8 +129,16 @@ class DriverManager:
         
         return None
     
-    def find_drivers(self, hardware: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Find available drivers for hardware"""
+    def find_drivers(self, hardware: Dict[str, Any], include_cross_os: bool = False) -> List[Dict[str, Any]]:
+        """Find available drivers for hardware
+        
+        Args:
+            hardware: Hardware information dictionary
+            include_cross_os: If True, include drivers for other operating systems (Windows, macOS)
+        
+        Returns:
+            List of driver dictionaries
+        """
         drivers = []
         
         hw_type = hardware.get('type')
@@ -132,20 +146,25 @@ class DriverManager:
         
         if hw_type == 'GPU':
             if vendor == 'NVIDIA':
-                drivers.extend(self._find_nvidia_drivers())
+                drivers.extend(self._find_nvidia_drivers(include_cross_os))
             elif vendor == 'AMD':
-                drivers.extend(self._find_amd_drivers())
+                drivers.extend(self._find_amd_drivers(include_cross_os))
             elif vendor == 'Intel':
-                drivers.extend(self._find_intel_drivers())
+                drivers.extend(self._find_intel_drivers(include_cross_os))
         
         elif hw_type == 'WiFi':
-            drivers.extend(self._find_wifi_drivers(hardware))
+            drivers.extend(self._find_wifi_drivers(hardware, include_cross_os))
         
         # Add risk percentage to each driver (mock values for now)
         for driver in drivers:
             if 'risk_percentage' not in driver:
-                # Calculate based on stability and source
-                if driver.get('stability') == 'stable' and driver.get('source') == 'official':
+                # Calculate based on stability, source, and OS
+                target_os = driver.get('target_os', 'linux').lower()
+                
+                # Cross-OS drivers have higher risk
+                if target_os != 'linux':
+                    driver['risk_percentage'] = 50  # Higher risk for cross-OS
+                elif driver.get('stability') == 'stable' and driver.get('source') == 'official':
                     driver['risk_percentage'] = RISK_OFFICIAL_STABLE
                 elif driver.get('stability') == 'stable':
                     driver['risk_percentage'] = RISK_STABLE
@@ -156,23 +175,28 @@ class DriverManager:
         
         return drivers
     
-    def _find_nvidia_drivers(self) -> List[Dict[str, Any]]:
-        """Find available NVIDIA drivers"""
+    def _find_nvidia_drivers(self, include_cross_os: bool = False) -> List[Dict[str, Any]]:
+        """Find available NVIDIA drivers
+        
+        Args:
+            include_cross_os: If True, include Windows and other OS drivers
+        """
         drivers = []
         
         # Check connectivity to NVIDIA sources
         nvidia_sources = self.connect_to_driver_sources('NVIDIA')
         
-        # Official NVIDIA drivers
+        # Official NVIDIA Linux drivers
         # Using direct driver implementation without shim layers
         drivers.append({
             'name': 'nvidia-driver-535',
             'version': '535.xx',
             'source': 'official',
             'stability': 'stable',
-            'description': 'NVIDIA Official Driver 535',
+            'description': 'NVIDIA Official Driver 535 (Linux)',
             'shimmed': False,  # Direct driver, no shim layer
             'glvnd': False,
+            'target_os': 'linux',
             'source_url': 'https://developer.download.nvidia.com/compute/cuda/repos/',
             'source_connected': nvidia_sources.get('official', False)
         })
@@ -182,9 +206,10 @@ class DriverManager:
             'version': '545.xx',
             'source': 'official',
             'stability': 'beta',
-            'description': 'NVIDIA Official Driver 545 (Beta)',
+            'description': 'NVIDIA Official Driver 545 (Beta) (Linux)',
             'shimmed': False,  # Direct driver, no shim layer
             'glvnd': False,
+            'target_os': 'linux',
             'source_url': 'https://developer.download.nvidia.com/compute/cuda/repos/',
             'source_connected': nvidia_sources.get('official', False)
         })
@@ -195,17 +220,61 @@ class DriverManager:
             'version': 'latest',
             'source': 'community',
             'stability': 'stable',
-            'description': 'Nouveau Open Source Driver',
+            'description': 'Nouveau Open Source Driver (Linux)',
             'shimmed': False,
             'glvnd': False,
+            'target_os': 'linux',
             'source_url': 'https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git',
             'source_connected': True  # Kernel source always available
         })
         
+        # Add Windows drivers if requested
+        if include_cross_os:
+            drivers.append({
+                'name': 'nvidia-driver-546.01-windows',
+                'version': '546.01',
+                'source': 'official',
+                'stability': 'stable',
+                'description': 'NVIDIA Game Ready Driver 546.01 (Windows 10/11)',
+                'shimmed': False,
+                'glvnd': False,
+                'target_os': 'windows',
+                'download_only': True,  # Can only download, not install
+                'source_url': 'https://us.download.nvidia.com/Windows/546.01/',
+                'source_connected': nvidia_sources.get('windows', False),
+                'compatibility_note': 'Windows driver - download for analysis/compatibility research only'
+            })
+            
+            drivers.append({
+                'name': 'nvidia-driver-537.13-windows',
+                'version': '537.13',
+                'source': 'official',
+                'stability': 'stable',
+                'description': 'NVIDIA Studio Driver 537.13 (Windows 10/11)',
+                'shimmed': False,
+                'glvnd': False,
+                'target_os': 'windows',
+                'download_only': True,
+                'source_url': 'https://us.download.nvidia.com/Windows/537.13/',
+                'source_connected': nvidia_sources.get('windows', False),
+                'compatibility_note': 'Windows driver - download for analysis/compatibility research only'
+            })
+        
         return drivers
     
-    def _find_amd_drivers(self) -> List[Dict[str, Any]]:
+    def _find_amd_drivers(self, include_cross_os: bool = False) -> List[Dict[str, Any]]:
         """Find available AMD drivers"""
+        drivers = []
+        
+        # Check connectivity to AMD sources
+        amd_sources = self.connect_to_driver_sources('AMD')
+        
+    def _find_amd_drivers(self, include_cross_os: bool = False) -> List[Dict[str, Any]]:
+        """Find available AMD drivers
+        
+        Args:
+            include_cross_os: If True, include Windows and other OS drivers
+        """
         drivers = []
         
         # Check connectivity to AMD sources
@@ -217,9 +286,10 @@ class DriverManager:
             'version': 'latest',
             'source': 'official',
             'stability': 'stable',
-            'description': 'AMD Official Open Source Driver',
+            'description': 'AMD Official Open Source Driver (Linux)',
             'shimmed': False,  # Direct driver, no shim layer
             'glvnd': False,
+            'target_os': 'linux',
             'source_url': 'https://repo.radeon.com/amdgpu-install/',
             'source_connected': amd_sources.get('official', False)
         })
@@ -230,17 +300,39 @@ class DriverManager:
             'version': 'latest',
             'source': 'official',
             'stability': 'stable',
-            'description': 'AMD Professional Driver',
+            'description': 'AMD Professional Driver (Linux)',
             'shimmed': False,  # Direct driver, no shim layer
             'glvnd': False,
+            'target_os': 'linux',
             'source_url': 'https://repo.radeon.com/amdgpu-install/',
             'source_connected': amd_sources.get('official', False)
         })
         
+        # Add Windows drivers if requested
+        if include_cross_os:
+            drivers.append({
+                'name': 'amd-radeon-23.12.1-windows',
+                'version': '23.12.1',
+                'source': 'official',
+                'stability': 'stable',
+                'description': 'AMD Radeon Software Adrenalin 23.12.1 (Windows 10/11)',
+                'shimmed': False,
+                'glvnd': False,
+                'target_os': 'windows',
+                'download_only': True,
+                'source_url': 'https://drivers.amd.com/drivers/whql-amd-software-adrenalin-edition-23.12.1-win10-win11-dec13.exe',
+                'source_connected': amd_sources.get('windows', False),
+                'compatibility_note': 'Windows driver - download for analysis/compatibility research only'
+            })
+        
         return drivers
     
-    def _find_intel_drivers(self) -> List[Dict[str, Any]]:
-        """Find available Intel drivers"""
+    def _find_intel_drivers(self, include_cross_os: bool = False) -> List[Dict[str, Any]]:
+        """Find available Intel drivers
+        
+        Args:
+            include_cross_os: If True, include Windows and other OS drivers
+        """
         drivers = []
         
         # Check connectivity to Intel sources
@@ -252,17 +344,40 @@ class DriverManager:
             'version': 'kernel',
             'source': 'distribution',
             'stability': 'stable',
-            'description': 'Intel i915 Kernel Driver',
+            'description': 'Intel i915 Kernel Driver (Linux)',
             'shimmed': False,  # Direct kernel driver, no shim layer
             'glvnd': False,
+            'target_os': 'linux',
             'source_url': 'https://repositories.intel.com/graphics/',
             'source_connected': intel_sources.get('official', False)
         })
         
+        # Add Windows drivers if requested
+        if include_cross_os:
+            drivers.append({
+                'name': 'intel-arc-graphics-31.0.101.5122-windows',
+                'version': '31.0.101.5122',
+                'source': 'official',
+                'stability': 'stable',
+                'description': 'Intel Arc & Iris Xe Graphics Driver (Windows 10/11)',
+                'shimmed': False,
+                'glvnd': False,
+                'target_os': 'windows',
+                'download_only': True,
+                'source_url': 'https://downloadmirror.intel.com/downloads/',
+                'source_connected': intel_sources.get('windows', False),
+                'compatibility_note': 'Windows driver - download for analysis/compatibility research only'
+            })
+        
         return drivers
     
-    def _find_wifi_drivers(self, hardware: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Find available WiFi drivers"""
+    def _find_wifi_drivers(self, hardware: Dict[str, Any], include_cross_os: bool = False) -> List[Dict[str, Any]]:
+        """Find available WiFi drivers
+        
+        Args:
+            hardware: Hardware information dictionary
+            include_cross_os: If True, include Windows and other OS drivers
+        """
         drivers = []
         vendor = hardware.get('vendor')
         
@@ -272,9 +387,10 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'Intel Wireless Driver',
+                'description': 'Intel Wireless Driver (Linux)',
                 'shimmed': False,  # Direct driver, no shim layer
-                'glvnd': False
+                'glvnd': False,
+                'target_os': 'linux'
             })
         
         elif vendor == 'Realtek':
@@ -283,9 +399,10 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'Realtek WiFi Driver',
+                'description': 'Realtek WiFi Driver (Linux)',
                 'shimmed': False,
-                'glvnd': False
+                'glvnd': False,
+                'target_os': 'linux'
             })
         
         elif vendor == 'MediaTek':
@@ -294,9 +411,10 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'MediaTek WiFi Driver',
+                'description': 'MediaTek WiFi Driver (Linux)',
                 'shimmed': False,
-                'glvnd': False
+                'glvnd': False,
+                'target_os': 'linux'
             })
         
         elif vendor == 'Broadcom':
@@ -305,9 +423,10 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'distribution',
                 'stability': 'stable',
-                'description': 'Broadcom WiFi Driver (Proprietary)',
+                'description': 'Broadcom WiFi Driver (Proprietary) (Linux)',
                 'shimmed': False,
-                'glvnd': False
+                'glvnd': False,
+                'target_os': 'linux'
             })
             
             drivers.append({
@@ -315,9 +434,10 @@ class DriverManager:
                 'version': 'latest',
                 'source': 'community',
                 'stability': 'stable',
-                'description': 'Broadcom Open Source Driver',
+                'description': 'Broadcom Open Source Driver (Linux)',
                 'shimmed': False,
-                'glvnd': False
+                'glvnd': False,
+                'target_os': 'linux'
             })
         
         return drivers
