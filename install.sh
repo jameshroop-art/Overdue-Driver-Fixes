@@ -50,6 +50,29 @@ fi
 echo "Detected package manager: $PKG_MANAGER"
 echo ""
 
+# Early venv creation in development mode (before system packages)
+# This ensures venv exists for testing even if installation is interrupted
+if [ -d "$SCRIPT_DIR/src" ] && [ -f "$SCRIPT_DIR/driver-mgt" ]; then
+    echo "Development mode detected - creating venv in repository..."
+    if [ ! -d "$SCRIPT_DIR/venv" ]; then
+        python3 -m venv "$SCRIPT_DIR/venv" || {
+            echo "⚠ Warning: Could not create venv in repository"
+            echo "  Will create it in /opt/driver-mgt during installation"
+        }
+        
+        if [ -d "$SCRIPT_DIR/venv" ]; then
+            echo "✓ Repository venv created"
+            # Install requirements in repo venv for development
+            "$SCRIPT_DIR/venv/bin/pip" install --upgrade pip -q
+            "$SCRIPT_DIR/venv/bin/pip" install -r "$SCRIPT_DIR/requirements.txt" -q && \
+                echo "✓ Development dependencies installed in repo venv"
+        fi
+    else
+        echo "✓ Repository venv already exists"
+    fi
+    echo ""
+fi
+
 # Install Python and pip
 echo "Installing Python and dependencies..."
 if [ "$PKG_MANAGER" = "apt" ]; then

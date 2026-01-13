@@ -409,9 +409,71 @@ Provide monitoring information:
             }
     
     def shutdown(self):
-        """Shutdown AI backend and cleanup"""
+        """Shutdown AI backend and cleanup - closes localhost sessions"""
         if self.backend == 'lmstudio' and self.backend_manager:
             self.backend_manager.shutdown()
+            self._stop_lmstudio_session()
         
-        # Note: We don't stop Ollama as it's a system service
-        # and might be used by other applications
+        # Don't stop system-wide Ollama service, but cleanup any alternate port instances
+        if self.backend == 'ollama' and self.ollama_port != 11434:
+            self._stop_ollama_alternate_port()
+    
+    def _stop_lmstudio_session(self):
+        """Stop LM Studio server session"""
+        try:
+            # Try to stop via API if available
+            requests.post('http://localhost:1234/server/stop', timeout=2)
+        except:
+            pass
+        
+        # Kill any LM Studio server processes we started
+        try:
+            import psutil
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['name'] and 'lmstudio' in proc.info['name'].lower():
+                        proc.terminate()
+                except:
+                    pass
+        except:
+            pass
+    
+    def _stop_ollama_alternate_port(self):
+        """Stop Ollama instance on alternate port (not system service)"""
+        try:
+            pid_file = Path.home() / '.cache' / 'driver-mgt' / 'ollama-alt.pid'
+            if pid_file.exists():
+                with open(pid_file, 'r') as f:
+                    pid = int(f.read().strip())
+                
+                import signal
+                os.kill(pid, signal.SIGTERM)
+                pid_file.unlink()
+                print(f"✓ Stopped Ollama on alternate port {self.ollama_port}")
+        except:
+            pass
+    
+    def ensure_backend_running(self) -> bool:
+        """
+        Ensure backend is running - start if needed
+        Used when operations require the backend
+        
+        Returns:
+            True if backend is running, False otherwise
+        """
+        if self.backend == 'ollama':
+            return self._check_ollama_available(port=self.ollama_port) or self._try_start_ollama()
+        elif self.backend == 'lmstudio':
+            return self._check_lmstudio_available() or self._try_start_lmstudio()
+        return False
+    
+    def stop_backend_session(self):
+        """
+        Stop backend session (to be called when not needed)
+        Only stops sessions we started, not system services
+        """
+        if self.backend == 'lmstudio':
+            self._stop_lmstudio_session()
+        elif self.backend == 'ollama' and self.ollama_port != 11434:
+            # Only stop if using alternate port (not system service)
+            self._stop_ollama_alternate_port()
