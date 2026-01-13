@@ -86,6 +86,19 @@ class AIManager:
             return self.manager.monitor_driver(hardware)
         return {'success': False, 'error': 'No AI backend available'}
     
+    @property
+    def model(self) -> str:
+        """Get the current AI model name"""
+        if self.manager and hasattr(self.manager, 'model'):
+            return self.manager.model
+        return 'starcoder:3b'  # Default model name
+    
+    def signin(self) -> Dict[str, Any]:
+        """Sign in to AI service (if required)"""
+        if self.manager and hasattr(self.manager, 'signin'):
+            return self.manager.signin()
+        return {'success': False, 'error': 'Sign-in not available for this backend'}
+    
     def validate_url_access(self, url: str) -> tuple[bool, str]:
         """Validate that a URL is allowed by whitelist"""
         # Basic validation - only allow driver/hardware related domains

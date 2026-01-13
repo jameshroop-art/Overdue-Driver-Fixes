@@ -142,6 +142,11 @@ def can_use_gui():
     
     return True
 
+def check_root_privileges():
+    """Check if running with root/sudo privileges"""
+    import os
+    return os.geteuid() == 0
+
 def main():
     """Main application entry point"""
     global _ai_manager
@@ -153,6 +158,16 @@ def main():
     logger = setup_logger(log_level)
     
     logger.info("Starting driver-mgt...")
+    
+    # Check for root privileges (required for driver management)
+    if not check_root_privileges():
+        print("⚠ Warning: driver-mgt is not running with root privileges")
+        print("  Some driver management operations require elevated privileges.")
+        print("  To run with root access:")
+        print("    sudo driver-mgt")
+        print("  Or use the desktop launcher which uses pkexec automatically.")
+        print("")
+        # Don't exit - allow running without root for viewing only
     
     # Check dependencies if requested
     if args.check_deps:

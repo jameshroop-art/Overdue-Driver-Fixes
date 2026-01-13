@@ -46,6 +46,10 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 800)  # Increased minimum size for better layout
         self.resize(1400, 900)  # Default size
         
+        # Check if running with root privileges
+        import os
+        self.has_root = os.geteuid() == 0
+        
         # Central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -55,11 +59,24 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         
-        # Title
+        # Title with privilege indicator
+        title_layout = QHBoxLayout()
         title = QLabel("driver-mgt")
         title.setStyleSheet("font-size: 24px; font-weight: bold; padding: 10px;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        title_layout.addWidget(title)
+        
+        # Add privilege indicator
+        if self.has_root:
+            priv_label = QLabel("🔓 Running with Root Privileges")
+            priv_label.setStyleSheet("color: green; font-weight: bold; padding: 10px;")
+        else:
+            priv_label = QLabel("⚠ Limited Mode (No Root)")
+            priv_label.setStyleSheet("color: orange; font-weight: bold; padding: 10px;")
+            priv_label.setToolTip("Some driver operations require root privileges. Use 'sudo driver-mgt' or the desktop launcher.")
+        
+        title_layout.addWidget(priv_label)
+        layout.addLayout(title_layout)
         
         # Tab widget
         self.tabs = QTabWidget()
@@ -215,7 +232,7 @@ class MainWindow(QMainWindow):
             device_tab = DeviceTab(
                 hardware,
                 self.driver_manager,
-                self.ollama_manager,
+                self.ai_manager,
                 self.config
             )
             
@@ -265,7 +282,7 @@ class MainWindow(QMainWindow):
     
     def check_ai_status(self):
         """Check AI assistant status"""
-        status = self.ollama_manager.get_status()
+        status = self.ai_manager.get_status()
         
         if status['status'] == 'running':
             self.ai_status_label.setText(f"AI Assistant: Running ({status.get('model', 'N/A')})")

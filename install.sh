@@ -395,7 +395,7 @@ cat > /usr/share/applications/driver-mgt.desktop <<EOF
 Type=Application
 Name=driver-mgt
 Comment=Advanced Linux Driver Management
-Exec=/usr/local/bin/driver-mgt
+Exec=pkexec env DISPLAY=\$DISPLAY XAUTHORITY=\$XAUTHORITY /usr/local/bin/driver-mgt
 Icon=preferences-system
 Terminal=true
 Categories=System;Settings;
