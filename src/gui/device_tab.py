@@ -37,12 +37,22 @@ class DriverInstallWorker(QThread):
         try:
             self.progress.emit(10, "Preparing installation...")
             
-            # Pre-installation risk assessment
-            self.progress.emit(20, "Assessing risks...")
-            risk = self.ai_manager.assess_risk(self.hardware, self.driver)
+            # Check if driver is from a trusted source
+            driver_source = self.driver.get('source', '').lower()
+            is_trusted_source = driver_source in ['official', 'distribution']
             
-            if risk['risk_percentage'] > RISK_HIGH_THRESHOLD:
-                self.progress.emit(25, f"High risk detected: {risk['risk_percentage']}%")
+            if is_trusted_source:
+                # For trusted sources, proceed immediately without waiting for risk assessment
+                self.progress.emit(20, f"Trusted source detected ({driver_source}), proceeding with installation...")
+                # Risk assessment can still run in background for logging, but don't wait for it
+                risk = None
+            else:
+                # For non-trusted sources, perform risk assessment first
+                self.progress.emit(20, "Assessing risks...")
+                risk = self.ai_manager.assess_risk(self.hardware, self.driver)
+                
+                if risk['risk_percentage'] > RISK_HIGH_THRESHOLD:
+                    self.progress.emit(25, f"High risk detected: {risk['risk_percentage']}%")
             
             # Install driver
             self.progress.emit(50, f"Installing {self.driver['name']}...")
@@ -794,16 +804,37 @@ Estimated Recovery Time: 2-5 minutes"""
     
     def install_driver(self, driver):
         """Install a driver with AI assistance"""
+        # Check if driver is from a trusted source
+        driver_source = driver.get('source', '').lower()
+        is_trusted_source = driver_source in ['official', 'distribution']
+        
+        # Build installation message based on source trust
+        if is_trusted_source:
+            install_message = (
+                f"Install {driver['name']} ({driver['version']}) from {driver['source']}?\n\n"
+                f"✓ Trusted source - installation will proceed immediately\n\n"
+                f"AI-assisted installation will:\n"
+                f"• Skip risk assessment (trusted source)\n"
+                f"• Monitor installation in real-time\n"
+                f"• Automatically correct errors\n"
+                f"• Test driver after installation\n"
+                f"• Create automatic backup for rollback"
+            )
+        else:
+            install_message = (
+                f"Install {driver['name']} ({driver['version']}) from {driver['source']}?\n\n"
+                f"AI-assisted installation will:\n"
+                f"• Assess risks before installation\n"
+                f"• Monitor installation in real-time\n"
+                f"• Automatically correct errors\n"
+                f"• Test driver after installation\n"
+                f"• Create automatic backup for rollback"
+            )
+        
         reply = QMessageBox.question(
             self,
             "Confirm Installation",
-            f"Install {driver['name']} ({driver['version']}) from {driver['source']}?\n\n"
-            f"AI-assisted installation will:\n"
-            f"• Assess risks before installation\n"
-            f"• Monitor installation in real-time\n"
-            f"• Automatically correct errors\n"
-            f"• Test driver after installation\n"
-            f"• Create automatic backup for rollback",
+            install_message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
