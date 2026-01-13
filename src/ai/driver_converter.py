@@ -1,6 +1,7 @@
 """
 AI Driver Converter Module
 Attempts to convert Windows/Other OS drivers to Linux drivers using AI analysis
+Can also decode driver processes and operations
 """
 
 from typing import Dict, Any, List
@@ -14,6 +15,188 @@ class DriverConverter:
         self.config = config_manager
         self.ai_manager = ai_manager
         self.conversion_logs = []
+        self.decoder = None  # Will be initialized on first use
+    
+    def _get_decoder(self):
+        """Lazy initialization of decoder"""
+        if self.decoder is None:
+            try:
+                from utils.driver_operation_decoder import DriverOperationDecoder
+                self.decoder = DriverOperationDecoder()
+            except ImportError:
+                print("Warning: Driver operation decoder not available")
+                self.decoder = None
+        return self.decoder
+    
+    def decode_driver_process(self, driver_info: Dict[str, Any], hardware: Dict[str, Any]) -> Dict[str, Any]:
+        """Decode driver process information and translate to operations
+        
+        This method uses the driver converter's AI capabilities combined with
+        the operation decoder to understand driver processes.
+        
+        Args:
+            driver_info: Driver information dictionary
+            hardware: Hardware information dictionary
+            
+        Returns:
+            Decoded process information with operations
+        """
+        result = {
+            'driver': driver_info.get('name', 'Unknown'),
+            'hardware': hardware.get('name', 'Unknown'),
+            'decoded_operations': [],
+            'process_details': {},
+            'recommended_actions': [],
+            'ai_insights': None
+        }
+        
+        # Use decoder if available
+        decoder = self._get_decoder()
+        if decoder:
+            # Translate hardware to operations
+            commands = decoder.translate_hardware_to_driver_commands(hardware)
+            result['decoded_operations'] = commands
+            
+            # Get device-specific operations
+            vendor_id = hardware.get('vendor_id')
+            device_id = hardware.get('device_id')
+            if vendor_id and device_id:
+                ops = decoder.translate_device_id_to_operations(vendor_id, device_id)
+                result['process_details']['supported_operations'] = ops
+            
+            # Decode driver binary if path provided
+            driver_path = driver_info.get('path')
+            if driver_path:
+                binary_info = decoder.decode_driver_binary(driver_path)
+                result['process_details']['binary_metadata'] = binary_info
+        
+        # Use AI to analyze driver processes if available
+        if self.ai_manager and self.ai_manager.is_available():
+            analysis_prompt = f"""Analyze this driver and decode its processes:
+
+Driver: {driver_info.get('name')}
+Version: {driver_info.get('version', 'Unknown')}
+Hardware: {hardware.get('name')} ({hardware.get('type')})
+Vendor: {hardware.get('vendor', 'Unknown')}
+Current Driver Module: {hardware.get('driver', 'None')}
+
+Task: Decode what processes and operations this driver performs:
+1. What kernel modules or processes does it spawn?
+2. What system calls does it make?
+3. What hardware operations does it perform?
+4. What are the critical driver processes for this hardware?
+5. How does it interact with the kernel?
+
+Provide detailed process breakdown and operation mapping.
+"""
+            
+            try:
+                ai_result = self.ai_manager.analyze_text(analysis_prompt)
+                if ai_result.get('success'):
+                    result['ai_insights'] = ai_result.get('analysis', '')
+                    
+                    # Parse AI insights for actionable information
+                    analysis = ai_result.get('analysis', '').lower()
+                    
+                    # Extract recommended actions from AI analysis
+                    if 'kernel module' in analysis:
+                        result['recommended_actions'].append('Check kernel module dependencies')
+                    if 'system call' in analysis:
+                        result['recommended_actions'].append('Monitor system call usage with strace')
+                    if 'interrupt' in analysis:
+                        result['recommended_actions'].append('Monitor interrupt handling')
+                    if 'dma' in analysis:
+                        result['recommended_actions'].append('Check DMA transfer operations')
+                    if 'ioctl' in analysis:
+                        result['recommended_actions'].append('Trace ioctl calls to driver')
+                        
+            except Exception as e:
+                result['ai_insights'] = f"AI analysis failed: {e}"
+        else:
+            result['ai_insights'] = "AI not available for process analysis"
+        
+        return result
+    
+    def decode_running_driver_processes(self, driver_name: str) -> Dict[str, Any]:
+        """Decode currently running processes for a driver
+        
+        Args:
+            driver_name: Name of the driver module
+            
+        Returns:
+            Dict with running process information
+        """
+        import subprocess
+        
+        result = {
+            'driver': driver_name,
+            'module_loaded': False,
+            'processes': [],
+            'kernel_threads': [],
+            'open_files': [],
+            'operations': []
+        }
+        
+        try:
+            # Check if module is loaded
+            lsmod_out = subprocess.check_output(['lsmod'], text=True)
+            if driver_name in lsmod_out:
+                result['module_loaded'] = True
+                
+                # Get module info
+                for line in lsmod_out.split('\n'):
+                    if line.startswith(driver_name):
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            result['module_size'] = parts[1]
+                            result['usage_count'] = parts[2]
+                            if len(parts) > 3:
+                                result['used_by'] = parts[3].split(',')
+            
+            # Find processes using the driver
+            try:
+                # Look for processes with driver in their name or using driver devices
+                ps_out = subprocess.check_output(['ps', 'aux'], text=True)
+                for line in ps_out.split('\n'):
+                    if driver_name in line.lower():
+                        result['processes'].append(line.strip())
+            except subprocess.CalledProcessError:
+                pass
+            
+            # Check for kernel threads
+            try:
+                # Kernel threads for this driver (e.g., [nvidia-modeset])
+                ps_threads = subprocess.check_output(['ps', '-eL', '-o', 'pid,lwp,comm'], text=True)
+                for line in ps_threads.split('\n'):
+                    if f'[{driver_name}' in line or f'{driver_name}d' in line:
+                        result['kernel_threads'].append(line.strip())
+            except subprocess.CalledProcessError:
+                pass
+            
+            # Check open files/devices
+            try:
+                lsof_out = subprocess.check_output(['lsof', '+D', '/dev'], text=True, stderr=subprocess.DEVNULL)
+                for line in lsof_out.split('\n'):
+                    if driver_name in line.lower():
+                        result['open_files'].append(line.strip())
+            except subprocess.CalledProcessError:
+                pass
+            
+            # Use decoder to get operation details
+            decoder = self._get_decoder()
+            if decoder and result['module_loaded']:
+                # Get operations for this driver type
+                result['operations'] = [
+                    'Driver is active and loaded',
+                    'Handling hardware interrupts',
+                    'Processing I/O requests',
+                    'Managing device state'
+                ]
+                
+        except Exception as e:
+            result['error'] = f"Failed to decode running processes: {e}"
+        
+        return result
     
     def can_convert(self, driver: Dict[str, Any]) -> bool:
         """Check if a driver can be converted"""
