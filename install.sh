@@ -195,13 +195,14 @@ fi
 echo ""
 echo "Creating configuration directories..."
 mkdir -p /etc/driver-mgt
+mkdir -p /root/driver-backups
 
 # Get the actual user (not root)
 ACTUAL_USER="${SUDO_USER:-$USER}"
 ACTUAL_HOME=$(getent passwd "$ACTUAL_USER" | cut -d: -f6)
 
 # Create user config directories as the actual user
-su - "$ACTUAL_USER" -c "mkdir -p $ACTUAL_HOME/.config/driver-mgt/{profiles,curves,logs,corrections,reports}"
+su - "$ACTUAL_USER" -c "mkdir -p $ACTUAL_HOME/.config/driver-mgt/{profiles,curves,logs,corrections,reports,backups}"
 
 echo ""
 echo "Installing driver-mgt..."
@@ -436,6 +437,192 @@ else
         echo "  You can manually check with: driver-mgt --check-deps"
     fi
 fi
+
+echo ""
+echo "Running backup system tests..."
+# Test backup functionality with None handling
+if "$INSTALL_DIR/venv/bin/python" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR/src')
+from utils.driver_backup import DriverBackupManager
+import tempfile
+
+print('Testing backup system...')
+with tempfile.TemporaryDirectory() as tmpdir:
+    backup_mgr = DriverBackupManager(backup_dir=tmpdir)
+    
+    # Test 1: None hardware name
+    test_hw = {'name': None, 'type': 'GPU', 'vendor': 'Test'}
+    test_drv = {'name': 'test-driver', 'version': '1.0'}
+    try:
+        backup_mgr.create_backup(test_hw, test_drv)
+        print('✓ Backup handles None hardware name')
+    except AttributeError as e:
+        print(f'✗ Backup failed with None hardware: {e}')
+        sys.exit(1)
+    
+    # Test 2: None driver name
+    test_hw2 = {'name': 'Test Device', 'type': 'GPU'}
+    test_drv2 = {'name': None, 'version': '1.0'}
+    try:
+        backup_mgr.create_backup(test_hw2, test_drv2)
+        print('✓ Backup handles None driver name')
+    except AttributeError as e:
+        print(f'✗ Backup failed with None driver: {e}')
+        sys.exit(1)
+    
+    # Test 3: get_latest_backup with None
+    try:
+        backup_mgr.get_latest_backup({'name': None})
+        print('✓ get_latest_backup handles None')
+    except AttributeError as e:
+        print(f'✗ get_latest_backup failed: {e}')
+        sys.exit(1)
+    
+    # Test 4: list_backups with None
+    try:
+        backup_mgr.list_backups({'name': None})
+        print('✓ list_backups handles None')
+    except AttributeError as e:
+        print(f'✗ list_backups failed: {e}')
+        sys.exit(1)
+
+print('✓ All backup tests passed')
+" 2>&1; then
+    echo "✓ Backup system validated"
+else
+    echo "⚠ Warning: Backup system tests failed"
+    echo "  The backup system may not handle None values correctly"
+fi
+
+echo ""
+echo "Testing timer functionality..."
+# Test timer functionality
+if "$INSTALL_DIR/venv/bin/python" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR/src')
+from utils.driver_test_timer import DriverTestTimer
+
+print('Testing timer system...')
+# Test initialization
+timer = DriverTestTimer(test_duration_minutes=5)
+if not timer:
+    print('✗ Timer initialization failed')
+    sys.exit(1)
+print('✓ Timer initialized correctly')
+
+# Test timer state
+if timer.is_test_active():
+    print('✗ Timer should not be active initially')
+    sys.exit(1)
+print('✓ Timer state check works')
+
+# Test remaining time when not active
+minutes, seconds = timer.get_remaining_time()
+if minutes != 0 or seconds != 0:
+    print('✗ Remaining time should be (0,0) when not active')
+    sys.exit(1)
+print('✓ Remaining time calculation works')
+
+print('✓ All timer tests passed')
+" 2>&1; then
+    echo "✓ Timer system validated"
+else
+    echo "⚠ Warning: Timer system tests failed"
+fi
+
+echo ""
+echo "Checking current active drivers..."
+# Create backup directory for driver backups
+mkdir -p /root/driver-backups
+chmod 755 /root/driver-backups
+
+# Check and list current active drivers
+"$INSTALL_DIR/venv/bin/python" -c "
+import sys
+import subprocess
+import re
+
+print('Scanning for active drivers...')
+print('')
+
+# Check GPU drivers
+gpu_info = []
+try:
+    lspci_out = subprocess.check_output(['lspci', '-k'], text=True)
+    gpu_section = ''
+    capture = False
+    for line in lspci_out.split('\n'):
+        if 'VGA' in line or '3D' in line or 'Display' in line:
+            capture = True
+            gpu_section = line + '\n'
+        elif capture:
+            if line and not line.startswith('\t'):
+                # End of this device section
+                gpu_info.append(gpu_section)
+                gpu_section = ''
+                capture = False
+            else:
+                gpu_section += line + '\n'
+    if gpu_section:
+        gpu_info.append(gpu_section)
+except Exception as e:
+    print(f'⚠ Could not check GPU drivers: {e}')
+
+if gpu_info:
+    print('GPU Drivers:')
+    for gpu in gpu_info:
+        lines = gpu.strip().split('\n')
+        device_line = lines[0] if lines else ''
+        print(f'  • {device_line}')
+        for line in lines[1:]:
+            if 'Kernel driver in use' in line:
+                driver = line.split(':')[-1].strip()
+                print(f'    → Driver: {driver}')
+else:
+    print('  No GPU devices detected')
+
+print('')
+
+# Check network drivers
+net_info = []
+try:
+    lspci_out = subprocess.check_output(['lspci', '-k'], text=True)
+    net_section = ''
+    capture = False
+    for line in lspci_out.split('\n'):
+        if 'Network' in line or 'Ethernet' in line or 'Wireless' in line:
+            capture = True
+            net_section = line + '\n'
+        elif capture:
+            if line and not line.startswith('\t'):
+                net_info.append(net_section)
+                net_section = ''
+                capture = False
+            else:
+                net_section += line + '\n'
+    if net_section:
+        net_info.append(net_section)
+except Exception as e:
+    print(f'⚠ Could not check network drivers: {e}')
+
+if net_info:
+    print('Network Drivers:')
+    for net in net_info[:3]:  # Limit to first 3
+        lines = net.strip().split('\n')
+        device_line = lines[0] if lines else ''
+        print(f'  • {device_line}')
+        for line in lines[1:]:
+            if 'Kernel driver in use' in line:
+                driver = line.split(':')[-1].strip()
+                print(f'    → Driver: {driver}')
+else:
+    print('  No network devices detected')
+
+print('')
+print('✓ Driver scan complete')
+print('  You can view detailed driver info in the GUI')
+" 2>&1 || echo "⚠ Could not scan drivers (this is normal on some systems)"
 
 echo ""
 echo "You can now run driver-mgt with:"
