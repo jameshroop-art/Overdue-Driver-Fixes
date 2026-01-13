@@ -225,6 +225,62 @@ The installer will:
 
 **Note**: The GUI and program are fully integrated. The same `driver-mgt` command provides both GUI and CLI interfaces.
 
+### LM Studio Installation (Alternative AI Backend)
+
+For users who prefer LM Studio over Ollama, we provide comprehensive setup documentation:
+
+**📖 [Complete LM Studio Setup Guide](LMSTUDIO_SETUP.md)** | **📄 [Quick Reference Card](LMSTUDIO_QUICKREF.md)**
+
+**Automated setup** (Recommended):
+```bash
+# Use the interactive setup script
+bash setup-lmstudio.sh
+```
+
+**Manual quick setup**:
+```bash
+# Download LM Studio
+wget https://lmstudio.ai/download/latest/linux/x64 -O lm-studio.AppImage
+chmod +x lm-studio.AppImage
+
+# Launch LM Studio and start the server
+./lm-studio.AppImage
+
+# In LM Studio: Navigate to "Local Server" → Click "Start Server"
+# Download models from the "Search" tab
+
+# Launch driver-mgt with LM Studio
+driver-mgt-lmstudio
+```
+
+**💡 Bonus: Share Models Between LM Studio and Ollama**
+
+Save disk space by sharing models between both AI backends:
+```bash
+# Set up model sharing (one-time setup)
+bash setup-model-sharing.sh
+
+# Now models downloaded via Ollama are available in LM Studio too!
+# Saves 50%+ disk space (no duplicate downloads)
+```
+
+See [LMSTUDIO_OLLAMA_MODEL_SHARING.md](LMSTUDIO_OLLAMA_MODEL_SHARING.md) for details.
+
+**Documentation**:
+- **[LMSTUDIO_SETUP.md](LMSTUDIO_SETUP.md)** - Complete installation and configuration guide
+  - Detailed installation instructions
+  - Localhost configuration steps
+  - How to download and manage additional models from online servers
+  - Performance optimization tips
+  - Comprehensive troubleshooting guide
+- **[LMSTUDIO_OLLAMA_MODEL_SHARING.md](LMSTUDIO_OLLAMA_MODEL_SHARING.md)** - Share models between LM Studio and Ollama
+  - Save 50%+ disk space
+  - Avoid duplicate model downloads
+  - Seamless backend switching
+- **[LMSTUDIO_QUICKREF.md](LMSTUDIO_QUICKREF.md)** - Quick reference card for daily use
+- **setup-lmstudio.sh** - Automated installation script
+- **setup-model-sharing.sh** - Automated model sharing setup
+
 ### Virtual Environment Details
 
 driver-mgt uses Python virtual environments to ensure dependency isolation and PEP 668 compliance:

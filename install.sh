@@ -394,6 +394,46 @@ else
 fi
 
 echo ""
+echo "============================================"
+echo "Alternative AI Backend: LM Studio"
+echo "============================================"
+echo "driver-mgt supports LM Studio as an alternative to Ollama."
+echo ""
+echo "LM Studio Features:"
+echo "  ✓ Easy-to-use graphical interface"
+echo "  ✓ Download models from online repositories"
+echo "  ✓ OpenAI-compatible API on localhost"
+echo "  ✓ No authentication required"
+echo "  ✓ GPU acceleration support"
+echo ""
+echo "For detailed installation and setup instructions, see:"
+echo "  📖 LMSTUDIO_SETUP.md"
+echo ""
+echo "Quick installation:"
+echo "  wget https://lmstudio.ai/download/latest/linux/x64 -O lm-studio.AppImage"
+echo "  chmod +x lm-studio.AppImage"
+echo "  ./lm-studio.AppImage"
+echo ""
+read -p "Would you like to view the LM Studio setup guide now? (y/N): " -n 1 -r
+echo ""
+
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if command -v less &> /dev/null; then
+        less "$SCRIPT_DIR/LMSTUDIO_SETUP.md"
+    elif command -v more &> /dev/null; then
+        more "$SCRIPT_DIR/LMSTUDIO_SETUP.md"
+    else
+        cat "$SCRIPT_DIR/LMSTUDIO_SETUP.md"
+    fi
+    echo ""
+    echo "Press Enter to continue installation..."
+    read
+else
+    echo "You can read the guide anytime: cat LMSTUDIO_SETUP.md"
+    echo "Or online: https://github.com/jameshroop-art/driver-mgt/blob/main/LMSTUDIO_SETUP.md"
+fi
+
+echo ""
 echo "Creating desktop entry..."
 cat > /usr/share/applications/driver-mgt.desktop <<EOF
 [Desktop Entry]

@@ -131,10 +131,51 @@ System configs: `/etc/driver-mgt/`
 - Runs locally, requires sign-in for some models
 - Start: `systemctl start ollama`
 
-### Using LM Studio
-- Install separately from https://lmstudio.ai/
-- Launch: `driver-mgt-lmstudio` or use "Driver Manager (LLM Studio)" desktop entry
-- Requires LM Studio to be running on localhost:1234
+### Using LM Studio (Alternative)
+
+**📖 Full Guide**: See [LMSTUDIO_SETUP.md](LMSTUDIO_SETUP.md) for complete installation and configuration instructions.
+
+**Quick Setup**:
+```bash
+# 1. Download and install LM Studio
+wget https://lmstudio.ai/download/latest/linux/x64 -O lm-studio.AppImage
+chmod +x lm-studio.AppImage
+
+# 2. Launch LM Studio
+./lm-studio.AppImage
+
+# 3. In LM Studio application:
+#    - Go to "Search" tab and download models (e.g., starcoder, codellama)
+#    - Go to "Local Server" tab
+#    - Click "Start Server" (will run on localhost:1234)
+#    - Select a model from the dropdown to load it
+
+# 4. Launch driver-mgt with LM Studio
+driver-mgt-lmstudio
+# Or use the desktop launcher: "Driver Manager (LLM Studio)"
+```
+
+**💡 Bonus - Share Models with Ollama**:
+```bash
+# Share models between LM Studio and Ollama (saves disk space!)
+bash setup-model-sharing.sh
+
+# Now models from Ollama are accessible in LM Studio
+# See: LMSTUDIO_OLLAMA_MODEL_SHARING.md
+```
+
+**Features**:
+- ✓ Localhost operation (complete privacy)
+- ✓ Download additional models from online repositories
+- ✓ OpenAI-compatible API
+- ✓ Multiple concurrent instances supported
+- ✓ GPU acceleration (NVIDIA/AMD)
+- ✓ Can share models with Ollama (no duplication)
+
+**Requirements**:
+- LM Studio must be running on http://localhost:1234
+- At least one model downloaded and loaded
+- 8GB+ RAM recommended (16GB+ for larger models)
 
 ## Support
 
