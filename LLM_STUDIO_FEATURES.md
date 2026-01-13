@@ -1,7 +1,33 @@
 # LLM Studio Integration and AI Security Features
 
 ## Overview
-This document describes the new features added to driver-mgt for LLM Studio integration, model selection, and AI security constraints.
+This document describes the features added to driver-mgt for LLM Studio integration, model selection, and AI security constraints.
+
+**📖 For installation instructions**, see the **[Complete LM Studio Setup Guide](LMSTUDIO_SETUP.md)**.
+
+## Installation Quick Reference
+
+```bash
+# Download LM Studio for Linux
+wget https://lmstudio.ai/download/latest/linux/x64 -O lm-studio.AppImage
+chmod +x lm-studio.AppImage
+
+# Launch and configure
+./lm-studio.AppImage
+# In LM Studio: Start Server (localhost:1234) and download models
+
+# Use with driver-mgt
+driver-mgt-lmstudio
+```
+
+**Full documentation**: [LMSTUDIO_SETUP.md](LMSTUDIO_SETUP.md) includes:
+- Complete installation steps
+- Localhost configuration
+- Model download instructions
+- Performance optimization
+- Troubleshooting guide
+
+## Integration Features
 
 ## New Features
 
