@@ -65,17 +65,31 @@ export VIRTUAL_ENV="$VENV_DIR"
 export PATH="$VENV_DIR/bin:$PATH"
 
 # Quick dependency check (optional, but helpful)
-if ! "$VENV_PYTHON" -c "import PyQt6, psutil, requests, yaml" 2>/dev/null; then
-    echo "Warning: Some Python dependencies may be missing in the virtual environment"
+echo -n "Checking Python dependencies... "
+MISSING_DEPS=()
+
+# Check each dependency individually for better error messages
+for dep_import in "PyQt6:PyQt6" "psutil:psutil" "requests:requests" "yaml:pyyaml"; do
+    IFS=':' read -r import_name pkg_name <<< "$dep_import"
+    if ! "$VENV_PYTHON" -c "import $import_name" 2>/dev/null; then
+        MISSING_DEPS+=("$pkg_name")
+    fi
+done
+
+if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+    echo "missing: ${MISSING_DEPS[*]}"
     echo ""
     echo "Attempting to install/repair dependencies..."
     
-    if "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt" 2>&1 | tail -5; then
+    if "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt"; then
         echo ""
-        echo "Dependencies installed. Continuing..."
+        echo "✓ Dependencies installed successfully"
+        echo ""
     else
         echo ""
-        echo "Error: Failed to install Python dependencies"
+        echo "✗ Error: Failed to install Python dependencies"
+        echo ""
+        echo "Missing dependencies: ${MISSING_DEPS[*]}"
         echo ""
         echo "This may be due to missing system libraries."
         echo "Run the system dependency checker:"
@@ -86,6 +100,8 @@ if ! "$VENV_PYTHON" -c "import PyQt6, psutil, requests, yaml" 2>/dev/null; then
         echo ""
         exit 1
     fi
+else
+    echo "OK"
 fi
 
 # Execute the Python script with the venv Python interpreter

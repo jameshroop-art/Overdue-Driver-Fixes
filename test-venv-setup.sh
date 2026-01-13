@@ -98,8 +98,7 @@ run_test "check-system-deps.sh is executable" "[ -x check-system-deps.sh ]"
 
 # Test 18: Verify venv Python is used by wrapper
 echo -ne "${BLUE}Testing: Wrapper uses venv Python...${NC} "
-WRAPPER_PYTHON=$(./driver-mgt --check-deps --no-keep-open 2>&1 | head -1 | grep -q "driver-mgt" && echo "yes" || echo "no")
-if [ "$WRAPPER_PYTHON" = "yes" ]; then
+if ./driver-mgt --check-deps --no-keep-open 2>&1 | grep -q "All dependencies installed"; then
     echo -e "${GREEN}✓ PASS${NC}"
     ((TEST_PASSED++))
 else

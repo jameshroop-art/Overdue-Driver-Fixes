@@ -20,6 +20,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Script directory: $SCRIPT_DIR"
 cd "$SCRIPT_DIR"
 
+# Load shared utilities if available
+if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+    source "$SCRIPT_DIR/utils.sh"
+fi
+
 # Detect distribution and package manager
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -110,15 +115,24 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     
     # Determine which OpenGL library package to use
     # Ubuntu 24.04+ and newer Debian versions replaced libgl1-mesa-glx with libgl1
-    OPENGL_PKG="libgl1-mesa-glx"
-    
-    # Check if libgl1-mesa-glx is actually installable (not just a virtual package)
-    if apt-cache show libgl1-mesa-glx 2>&1 | grep -q "^Package: libgl1-mesa-glx"; then
-        echo "Using libgl1-mesa-glx for OpenGL support"
+    if type detect_opengl_package &>/dev/null; then
+        OPENGL_PKG=$(detect_opengl_package)
+        if [ "$OPENGL_PKG" = "libgl1-mesa-glx" ]; then
+            echo "Using libgl1-mesa-glx for OpenGL support"
+        else
+            echo "Note: libgl1-mesa-glx not available (obsolete in Ubuntu 24.04+)"
+            echo "Using libgl1 instead"
+        fi
     else
-        echo "Note: libgl1-mesa-glx not available (obsolete in Ubuntu 24.04+)"
-        echo "Using libgl1 instead"
+        # Fallback if utils.sh not loaded
         OPENGL_PKG="libgl1"
+        if apt-cache show libgl1-mesa-glx 2>/dev/null | grep -q "^Package: libgl1-mesa-glx"; then
+            OPENGL_PKG="libgl1-mesa-glx"
+            echo "Using libgl1-mesa-glx for OpenGL support"
+        else
+            echo "Note: libgl1-mesa-glx not available (obsolete in Ubuntu 24.04+)"
+            echo "Using libgl1 instead"
+        fi
     fi
     
     # Debian 12 (Bookworm) specific packages

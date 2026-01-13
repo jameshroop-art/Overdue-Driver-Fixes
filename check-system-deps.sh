@@ -4,6 +4,12 @@
 
 set -e
 
+# Get script directory and load shared utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+    source "$SCRIPT_DIR/utils.sh"
+fi
+
 echo "=========================================="
 echo "System Library Dependency Checker"
 echo "=========================================="
@@ -141,15 +147,22 @@ if [ $MISSING_LIBS -eq 1 ]; then
             echo "To install missing dependencies, run:"
             echo ""
             
-            # Determine OpenGL package
-            # Check if libgl1-mesa-glx is actually installable (not just virtual)
-            if apt-cache show libgl1-mesa-glx 2>&1 | grep -q "^Package: libgl1-mesa-glx"; then
-                OPENGL_PKG="libgl1-mesa-glx"
+            # Determine OpenGL package using shared utility
+            if type detect_opengl_package &>/dev/null; then
+                OPENGL_PKG=$(detect_opengl_package)
+                if [ "$OPENGL_PKG" = "libgl1" ]; then
+                    echo -e "${BLUE}Note: Using libgl1 (libgl1-mesa-glx is obsolete in Ubuntu 24.04+)${NC}"
+                    echo ""
+                fi
             else
-                # Ubuntu 24.04+ and newer systems use libgl1 instead
-                OPENGL_PKG="libgl1"
-                echo -e "${BLUE}Note: Using libgl1 (libgl1-mesa-glx is obsolete in Ubuntu 24.04+)${NC}"
-                echo ""
+                # Fallback if utils.sh not loaded
+                if apt-cache show libgl1-mesa-glx 2>/dev/null | grep -q "^Package: libgl1-mesa-glx"; then
+                    OPENGL_PKG="libgl1-mesa-glx"
+                else
+                    OPENGL_PKG="libgl1"
+                    echo -e "${BLUE}Note: Using libgl1 (libgl1-mesa-glx is obsolete in Ubuntu 24.04+)${NC}"
+                    echo ""
+                fi
             fi
             
             if [ $IS_ROOT -eq 1 ]; then
