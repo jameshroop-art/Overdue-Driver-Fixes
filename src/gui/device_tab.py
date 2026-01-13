@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 # Risk assessment thresholds
@@ -99,10 +99,13 @@ class DeviceTab(QWidget):
         # Initialize backup manager and test timer
         from utils.driver_backup import DriverBackupManager
         from utils.driver_test_timer import DriverTestTimer
+        from utils.driver_stress_test import DriverStressTest
         self.backup_manager = DriverBackupManager()
         self.test_timer = DriverTestTimer(test_duration_minutes=5)
+        self.stress_tester = DriverStressTest(hardware)
         self.current_backup_path = None
         self.pending_driver = None
+        self.stress_test_running = False
         
         self.init_ui()
         self.load_drivers()
@@ -1072,13 +1075,14 @@ Estimated Recovery Time: 2-5 minutes"""
                 QMessageBox.critical(self, "Installation Failed", message)
     
     def show_test_timer_dialog(self):
-        """Show dialog for test timer with confirm/revert buttons"""
+        """Show dialog for test timer with confirm/revert buttons and stress test option"""
         self.timer_dialog = QMessageBox(self)
         self.timer_dialog.setWindowTitle("Driver Test Period - 5 Minutes")
         self.timer_dialog.setIcon(QMessageBox.Icon.Information)
         
         # Add custom buttons
         confirm_btn = self.timer_dialog.addButton("✓ Confirm Driver Works", QMessageBox.ButtonRole.AcceptRole)
+        stress_test_btn = self.timer_dialog.addButton("⚡ Run Stress Test", QMessageBox.ButtonRole.ActionRole)
         revert_btn = self.timer_dialog.addButton("✗ Revert Driver Now", QMessageBox.ButtonRole.RejectRole)
         
         # Create timer to update message
@@ -1100,11 +1104,14 @@ Estimated Recovery Time: 2-5 minutes"""
         
         if clicked_button == confirm_btn:
             self.confirm_driver_works()
+        elif clicked_button == stress_test_btn:
+            # Start stress test
+            self.start_stress_test()
         elif clicked_button == revert_btn:
             self.revert_driver_now()
     
     def update_timer_dialog_message(self):
-        """Update the timer dialog message with remaining time"""
+        """Update the timer dialog message with remaining time and stress test status"""
         if not self.test_timer.is_test_active():
             if hasattr(self, 'timer_dialog'):
                 self.timer_dialog.close()
@@ -1113,17 +1120,33 @@ Estimated Recovery Time: 2-5 minutes"""
         minutes, seconds = self.test_timer.get_remaining_time()
         elapsed_min, elapsed_sec = self.test_timer.get_elapsed_time()
         
+        # Build message with stress test status if running
+        stress_status = ""
+        if self.stress_test_running:
+            results = self.stress_tester.get_results()
+            summary = results.get('summary', {})
+            stress_status = (
+                f"\n⚡ STRESS TEST RUNNING\n"
+                f"Level: {results.get('stress_level', 'unknown').upper()}\n"
+                f"Tests Performed: {summary.get('total_tests', 0)}\n"
+                f"Passed: {summary.get('passed_tests', 0)} | "
+                f"Failed: {summary.get('failed_tests', 0)}\n"
+                f"Success Rate: {summary.get('success_rate', 0):.1f}%\n"
+            )
+        
         message = (
             f"⏱ DRIVER TEST PERIOD\n\n"
             f"Testing: {self.pending_driver.get('name', 'Unknown')} ({self.pending_driver.get('version', 'Unknown')})\n"
             f"Hardware: {self.hardware.get('name', 'Unknown')}\n\n"
             f"Time Elapsed: {elapsed_min}m {elapsed_sec}s\n"
-            f"Time Remaining: {minutes}m {seconds}s\n\n"
-            f"Please test the following:\n"
+            f"Time Remaining: {minutes}m {seconds}s\n"
+            f"{stress_status}\n"
+            f"{'Basic Testing:' if not self.stress_test_running else 'Manual Testing:'}\n"
             f"✓ Basic hardware functionality\n"
             f"✓ System stability\n"
             f"✓ Performance\n"
             f"✓ Hardware-specific features\n\n"
+            f"{'⚡ Click \"Run Stress Test\" for heavy load simulation\n\n' if not self.stress_test_running else ''}"
             f"⚠ If timer expires without confirmation,\n"
             f"   the driver will be automatically reverted!"
         )
@@ -1166,7 +1189,114 @@ Estimated Recovery Time: 2-5 minutes"""
         
         if reply == QMessageBox.StandardButton.Yes:
             self.test_timer.cancel_test()
+            if self.stress_test_running:
+                self.stress_tester.stop_stress_test()
+                self.stress_test_running = False
             self.restore_from_backup()
+    
+    def start_stress_test(self):
+        """Start heavy load stress test simulation for 15 minutes"""
+        if self.stress_test_running:
+            QMessageBox.warning(
+                self,
+                "Stress Test Running",
+                "A stress test is already running. Please wait for it to complete."
+            )
+            return
+        
+        # Confirm stress test
+        reply = QMessageBox.question(
+            self,
+            "⚡ Start Stress Test",
+            f"Start 15-minute HEAVY LOAD stress test?\n\n"
+            f"Driver: {self.pending_driver.get('name', 'Unknown')}\n"
+            f"Hardware: {self.hardware.get('name', 'Unknown')}\n\n"
+            f"This will simulate:\n"
+            f"• Extended period heavy load (15 minutes)\n"
+            f"• High concurrent operations\n"
+            f"• Memory stress testing\n"
+            f"• I/O intensive operations\n"
+            f"• Thermal and power management tests\n\n"
+            f"⚠ Note: This is a SIMULATED test in code\n"
+            f"   No actual hardware stress will occur\n\n"
+            f"The 5-minute timer will be extended to accommodate\n"
+            f"the full 15-minute stress test period.\n\n"
+            f"Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Extend timer for stress test (15 minutes + 2 minute buffer)
+        self.test_timer.test_duration_minutes = 17
+        self.test_timer.test_duration_seconds = 17 * 60
+        self.test_timer.test_end_time = datetime.now() + timedelta(minutes=17)
+        
+        QMessageBox.information(
+            self,
+            "⚡ Stress Test Started",
+            f"15-minute HEAVY LOAD stress test started!\n\n"
+            f"Test Configuration:\n"
+            f"• Duration: 15 minutes\n"
+            f"• Load Level: HEAVY\n"
+            f"• Test Type: Simulated (no hardware impact)\n"
+            f"• Extended Timer: 17 minutes total\n\n"
+            f"The test will run automatically.\n"
+            f"Real-time results will appear in the timer dialog.\n\n"
+            f"You can still confirm or revert the driver at any time."
+        )
+        
+        # Start stress test
+        self.stress_test_running = True
+        success = self.stress_tester.start_stress_test(
+            duration_seconds=900,  # 15 minutes
+            stress_level='heavy',
+            on_progress=self.on_stress_test_progress,
+            on_complete=self.on_stress_test_complete
+        )
+        
+        if not success:
+            self.stress_test_running = False
+            QMessageBox.critical(
+                self,
+                "Stress Test Failed",
+                "Failed to start stress test. Please try again."
+            )
+    
+    def on_stress_test_progress(self, test_name: str, status: str, elapsed_seconds: float):
+        """Called during stress test progress"""
+        # This is called frequently, so we just track it
+        # The timer dialog will poll for updates
+        pass
+    
+    def on_stress_test_complete(self, results: dict):
+        """Called when stress test completes"""
+        self.stress_test_running = False
+        
+        # Generate report
+        report = self.stress_tester.generate_report()
+        summary = results.get('summary', {})
+        
+        # Show completion message
+        QMessageBox.information(
+            self,
+            "⚡ Stress Test Complete",
+            f"15-minute HEAVY LOAD stress test completed!\n\n"
+            f"Results Summary:\n"
+            f"• Total Tests: {summary.get('total_tests', 0)}\n"
+            f"• Passed: {summary.get('passed_tests', 0)}\n"
+            f"• Failed: {summary.get('failed_tests', 0)}\n"
+            f"• Success Rate: {summary.get('success_rate', 0):.2f}%\n"
+            f"• Duration: {results.get('duration_seconds', 0):.1f} seconds\n\n"
+            f"Driver appears to be {'STABLE' if summary.get('success_rate', 0) >= 95 else 'UNSTABLE'} "
+            f"under heavy load.\n\n"
+            f"Full report has been logged.\n\n"
+            f"You can now confirm the driver or revert if needed."
+        )
+        
+        # Log the report
+        print(report)
     
     def on_test_timeout(self, driver, hardware):
         """Called when test timer expires without confirmation"""
